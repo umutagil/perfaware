@@ -5,11 +5,11 @@
 #include <bitset>
 #include <assert.h>
 
-const unsigned char opCodeRmToReg = 0b100010;
-const unsigned char opCodeImmToRm = 0b1100011;
-const unsigned char opCodeImmToReg = 0b1011;
-const unsigned char opCodeMemToAcc = 0b1010000;
-const unsigned char opCodeAccToMem = 0b1010001;
+// Leftmost bits
+const unsigned char opCodeMoveRmToReg = 0b100010;
+const unsigned char opCodeMoveImmToRm = 0b1100011;
+const unsigned char opCodeMoveImmToReg = 0b1011;
+const unsigned char opCodeMoveMemAcc = 0b101000;
 
 const std::string oneByteRegs[] = {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"};
 const std::string twoByteRegs[] = { "ax", "cx", "dx", "bx", "sp", "bp", "si", "di" };
@@ -82,7 +82,7 @@ std::string readEffectiveAddressFromBuffer(std::stringstream& buffer, const bool
 	return address;
 }
 
-std::string decodeRmToReg(const char opCode, std::stringstream& buffer)
+std::string decodeMoveRmToReg(const char opCode, std::stringstream& buffer)
 {
 	const bool isToRegister = opCode & 0x02;
 	const bool isWord = opCode & 0x01;
@@ -112,7 +112,7 @@ std::string decodeRmToReg(const char opCode, std::stringstream& buffer)
 	return "mov " + dest + ", " + src;
 }
 
-std::string decodeImmToRm(const char opCode, std::stringstream& buffer)
+std::string decodeMoveImmToRm(const char opCode, std::stringstream& buffer)
 {
 	const bool isWord = opCode & 0x01;
 
@@ -127,15 +127,12 @@ std::string decodeImmToRm(const char opCode, std::stringstream& buffer)
 		return "mov " + dest + ", " + src;
 	}
 
-	const std::string address = "[" + readEffectiveAddressFromBuffer(buffer, isWord, mod, rm) + "]";
-
-	const std::string dest = address;
+	const std::string dest = "[" + readEffectiveAddressFromBuffer(buffer, isWord, mod, rm) + "]";
 	const std::string src = (isWord ? "word " : " byte ") + readDataFromBuffer(buffer, isWord);
-
 	return "mov " + dest + ", " + src;
 }
 
-std::string decodeImmToReg(const char opCode, std::stringstream& buffer)
+std::string decodeMoveImmToReg(const char opCode, std::stringstream& buffer)
 {
 	const bool isWord = opCode & 0b00001000;
 	const unsigned char regIdx = opCode & 0b00000111;
@@ -145,18 +142,15 @@ std::string decodeImmToReg(const char opCode, std::stringstream& buffer)
 	return "mov " + dest + ", " + src;
 }
 
-std::string decodeMemToAcc(const char opCode, std::stringstream& buffer)
+std::string decodeMoveMemAcc(const char opCode, std::stringstream& buffer)
 {
 	const bool isWord = opCode & 0x01;
+	const bool toMemory = opCode & 0x02;
 	const std::string address = readDataFromBuffer(buffer, isWord);
-	return "mov ax, [" + address + "]";
+	return toMemory ? "mov [" + address + "], ax" : "mov ax, [" + address + "]";
 }
 
-std::string decodeAccToMem(const char opCode, std::stringstream& buffer)
 {
-	const bool isWord = opCode & 0x01;
-	const std::string address = readDataFromBuffer(buffer, isWord);
-	return "mov [" + address + "], ax";
 }
 
 void disassemble(const std::string& fileName)
@@ -182,20 +176,19 @@ void disassemble(const std::string& fileName)
 	for (unsigned char opcodeByte = buffer.get(); !buffer.eof(); opcodeByte = buffer.get()) {
 		std::string decodedInstruction;
 
-		if ((opcodeByte >> 2) == opCodeRmToReg) {
-			decodedInstruction = decodeRmToReg(opcodeByte, buffer);
+		if ((opcodeByte >> 2) == opCodeMoveRmToReg) {
+			decodedInstruction = decodeMoveRmToReg(opcodeByte, buffer);
 		}
-		else if ((opcodeByte >> 1) == opCodeImmToRm) {
-			decodedInstruction = decodeImmToRm(opcodeByte, buffer);
+		else if ((opcodeByte >> 1) == opCodeMoveImmToRm) {
+			decodedInstruction = decodeMoveImmToRm(opcodeByte, buffer);
 		}
-		else if ((opcodeByte >> 4) == opCodeImmToReg) {
-			decodedInstruction = decodeImmToReg(opcodeByte, buffer);
+		else if ((opcodeByte >> 4) == opCodeMoveImmToReg) {
+			decodedInstruction = decodeMoveImmToReg(opcodeByte, buffer);
 		}
-		else if ((opcodeByte >> 1) == opCodeMemToAcc) {
-			decodedInstruction = decodeMemToAcc(opcodeByte, buffer);
+		else if ((opcodeByte >> 2) == opCodeMoveMemAcc) {
+			decodedInstruction = decodeMoveMemAcc(opcodeByte, buffer);
 		}
-		else if ((opcodeByte >> 1) == opCodeAccToMem) {
-			decodedInstruction = decodeAccToMem(opcodeByte, buffer);
+		}
 		}
 
 		outputFile << decodedInstruction << std::endl;
