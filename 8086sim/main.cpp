@@ -12,6 +12,8 @@ const unsigned char opCodeMoveImmToReg = 0b1011;
 const unsigned char opCodeMoveMemAcc = 0b101000;
 const unsigned char opCodeAddSubReg = 0b00;
 const unsigned char opCodeAddSubAcc = 0b100000;
+const unsigned char opCodeJumpCond = 0b0111;
+const unsigned char opCodeLoop = 0b1110;
 
 const std::string oneByteRegs[] = {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"};
 const std::string twoByteRegs[] = { "ax", "cx", "dx", "bx", "sp", "bp", "si", "di" };
@@ -19,6 +21,8 @@ const std::string twoByteRegs[] = { "ax", "cx", "dx", "bx", "sp", "bp", "si", "d
 const std::string effectiveAdressModes[] = { "bx + si", "bx + di", "bp + si", "bp + di", "si", "di", "bp", "bx" };
 
 const std::string arithmeticOpCodes[] = { "add", "sub", "", "cmp" };
+const std::string conditionalJumpOpCodes[] = { "jo", "jno", "jb", "jnb", "je", "jne", "jbe", "ja", "js", "jns", "jp", "jnp", "jl", "jnl", "jle", "jg" };
+const std::string loopOpCodes[] = { "loopnz", "loopz",  "loop",  "jcxz" };
 
 enum class MoveMode : char
 {
@@ -181,6 +185,20 @@ std::string decodeArithImmToAcc(const unsigned char opCode, std::stringstream& b
 	return arithmeticOpCodes[idx] + " " + acc + ", " + data;
 }
 
+std::string decodeJumpConditional(const unsigned char opCode, std::stringstream& buffer)
+{
+	const uint8_t idx = opCode & 0x0f;
+	const std::string displacement = readDataFromBuffer(buffer, false);
+	return conditionalJumpOpCodes[idx] + " " + displacement;
+}
+
+std::string decodeLoop(const unsigned char opCode, std::stringstream& buffer)
+{
+	const uint8_t idx = (opCode & 0x03);
+	const std::string displacement = readDataFromBuffer(buffer, false);
+	return loopOpCodes[idx] + " " + displacement;
+}
+
 void disassemble(const std::string& fileName)
 {
 	std::ofstream outputFile("test_files/output.asm");
@@ -224,7 +242,12 @@ void disassemble(const std::string& fileName)
 		else if ((opcodeByte >> 2) == opCodeAddSubAcc) {
 			decodedInstruction = decodeArithImmToRm(opcodeByte, buffer);
 		}
-
+		else if ((opcodeByte >> 4) == opCodeJumpCond) {
+			decodedInstruction = decodeJumpConditional(opcodeByte, buffer);
+		}
+		else if ((opcodeByte >> 4) == opCodeLoop) {
+			decodedInstruction = decodeLoop(opcodeByte, buffer);
+		}
 		outputFile << decodedInstruction << std::endl;
 	}
 }
