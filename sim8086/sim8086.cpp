@@ -8,6 +8,8 @@
 #include "text_utils.h"
 
 u16 registerValues[13] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+bool registerTouchedFlags[13] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+static_assert(ArrayCount(registerValues) == ArrayCount(registerTouchedFlags));
 
 void ExecuteInstruction(const instruction& decodedInstruction)
 {
@@ -18,6 +20,7 @@ void ExecuteInstruction(const instruction& decodedInstruction)
     const bool W = decodedInstruction.Flags & Inst_Wide;
 
     const register_access targetReg = decodedInstruction.Operands[0].Register;
+    registerTouchedFlags[targetReg.Index] = 1;
     assert(targetReg.Count == W + 1);
 
     instruction_operand secondOperand = decodedInstruction.Operands[1];
@@ -79,7 +82,11 @@ void PrintFinalRegisterState(FILE* Dest)
 {
     fprintf(Dest, "Final Registers:\n");
 
-    for (size_t i = 1; i < ArrayCount(registerValues); ++i) {
+    for (size_t i = 1; i < ArrayCount(registerTouchedFlags); ++i) {
+        if (!registerTouchedFlags[i]) {
+            continue;
+        }
+
         register_access reg{ i, 0 , 2};
         fprintf(Dest, "      %s:0x%x (%d)\n", Sim86_RegisterNameFromOperand(&reg), registerValues[i], registerValues[i]);
     }
