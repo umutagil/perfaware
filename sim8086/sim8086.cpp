@@ -64,18 +64,18 @@ void ExecuteInstruction(const instruction& decodedInstruction)
     }
 }
 
-void PrintRegisterStateChange(instruction decodedInstruction, FILE* Dest)
+void PrintPreExecutionState(instruction decodedInstruction, FILE* Dest)
 {
-    if (decodedInstruction.Operands[0].Type != Operand_Register) {
-        return;
-    }
-
-    fprintf(Dest, " ; ");
-
+    assert(decodedInstruction.Operands[0].Type == Operand_Register);
     register_access reg = decodedInstruction.Operands[0].Register;
-    fprintf(Dest, "%s:0x%x->", Sim86_RegisterNameFromOperand(&reg), registerValues[reg.Index]);
-    ExecuteInstruction(decodedInstruction);
-    fprintf(Dest, "0x%x", registerValues[reg.Index]);
+    fprintf(Dest, " ; %s:0x%x->", Sim86_RegisterNameFromOperand(&reg), registerValues[reg.Index]);
+}
+
+void PrintPostExecutionState(instruction decodedInstruction, FILE* Dest)
+{
+    assert(decodedInstruction.Operands[0].Type == Operand_Register);
+    const register_access reg = decodedInstruction.Operands[0].Register;
+    fprintf(Dest, "0x%x\n", registerValues[reg.Index]);
 }
 
 void PrintFinalRegisterState(FILE* Dest)
@@ -103,14 +103,20 @@ void Execute8086(std::vector<u8>& buffer)
         Sim86_Decode8086Instruction(buffer.size() - Offset, instructions + Offset, &Decoded);
 
         if (!Decoded.Op) {
-            printf("Unrecognized instruction\n");
+            printf("Unrecognized instruction.\n");
+            break;
+        }
+
+        if (Decoded.Operands[0].Type != Operand_Register) {
+            printf("Not implemented.\n");
             break;
         }
 
         Offset += Decoded.Size;
         PrintInstruction(Decoded, stdout);
-        PrintRegisterStateChange(Decoded, stdout);
-        printf("\n");
+        PrintPreExecutionState(Decoded, stdout);
+        ExecuteInstruction(Decoded);
+        PrintPostExecutionState(Decoded, stdout);
     }
 
     PrintFinalRegisterState(stdout);
