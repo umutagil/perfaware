@@ -104,7 +104,7 @@ void ExecuteMov(const instruction& decodedInstruction)
 	const bool wide = decodedInstruction.Flags & Inst_Wide;
 
 	const register_access targetReg = decodedInstruction.Operands[0].Register;
-	assert(targetReg.Count == wide + 1);
+	assert(targetReg.Count == static_cast<u32>(wide) + 1);
 
 	instruction_operand secondOperand = decodedInstruction.Operands[1];
 	switch (secondOperand.Type) {
@@ -156,7 +156,7 @@ void ExecuteArithmetic(const instruction& decodedInstruction)
 
 	const register_access targetReg = decodedInstruction.Operands[0].Register;
 	const s16 targetVal = registers[targetReg.Index].GetValue();
-	assert(targetReg.Count == wide + 1);
+	assert(targetReg.Count == static_cast<u32>(wide) + 1);
 
 	const instruction_operand secondOperand = decodedInstruction.Operands[1];
 	assert(secondOperand.Type == Operand_Immediate || secondOperand.Type == Operand_Register);
@@ -172,21 +172,21 @@ void ExecuteArithmetic(const instruction& decodedInstruction)
 	switch (decodedInstruction.Op) {
 		case Op_add: {
 			result = ToU32(targetVal) + ToU32(sourceVal);
-			overflow = CheckOverflow(targetVal, sourceVal, result);
+			overflow = CheckOverflow(targetVal, sourceVal, static_cast<s16>(result));
 			auxCarry = ((targetVal & 0x0F) + (sourceVal & 0x0F)) & 0x10;
 			registers[targetReg.Index].SetValue(static_cast<u16>(result & 0x0000FFFF));
 			break;
 		}
 		case Op_sub: {
 			result = ToU32(targetVal) - ToU32(sourceVal);
-			overflow = CheckOverflow(targetVal, -sourceVal, result);
+			overflow = CheckOverflow(targetVal, -sourceVal, static_cast<s16>(result));
 			auxCarry = ((targetVal & 0x0F) - (sourceVal & 0x0F)) & 0x10;
 			registers[targetReg.Index].SetValue(static_cast<u16>(result & 0x0000FFFF));
 			break;
 		}
 		case Op_cmp:
 			result = ToU32(targetVal) - ToU32(sourceVal);
-			overflow = CheckOverflow(targetVal, -sourceVal, result);
+			overflow = CheckOverflow(targetVal, -sourceVal, static_cast<s16>(result));
 			auxCarry = ((targetVal & 0x0F) - (sourceVal & 0x0F)) & 0x10;
 			break;
 
@@ -237,7 +237,7 @@ std::string GetActiveFlagNames(const u8 bitFlags)
 	return result;
 }
 
-void PrintExecutionStateChange(const instruction decodedInstruction, ExecutionContext context, FILE* Dest)
+void PrintExecutionState(const instruction decodedInstruction, ExecutionContext context, FILE* Dest)
 {
 	assert(decodedInstruction.Operands[0].Type == Operand_Register);
 
@@ -280,27 +280,27 @@ void Execute8086(std::vector<u8>& buffer)
 {
 	u8* instructions = &buffer[0];
 
-	u32 Offset = 0;
-	while (Offset < buffer.size()) {
-		instruction Decoded;
-		Sim86_Decode8086Instruction(buffer.size() - Offset, instructions + Offset, &Decoded);
+	u32 offset = 0;
+	while (offset < buffer.size()) {
+		instruction decoded;
+		Sim86_Decode8086Instruction(buffer.size() - offset, instructions + offset, &decoded);
 
-		if (!Decoded.Op) {
+		if (!decoded.Op) {
 			printf("Unrecognized instruction.\n");
 			break;
 		}
 
-		if (Decoded.Operands[0].Type != Operand_Register) {
+		if (decoded.Operands[0].Type != Operand_Register) {
 			printf("Not implemented.\n");
 			break;
 		}
 
-		Offset += Decoded.Size;
+		offset += decoded.Size;
 
-		PrintInstruction(Decoded, stdout);
-		const ExecutionContext context = GetCurrentState(Decoded);
-		ExecuteInstruction(Decoded);
-		PrintExecutionStateChange(Decoded, context, stdout);
+		PrintInstruction(decoded, stdout);
+		const ExecutionContext context = GetCurrentState(decoded);
+		ExecuteInstruction(decoded);
+		PrintExecutionState(decoded, context, stdout);
 	}
 
 	PrintFinalState(stdout);
@@ -312,13 +312,13 @@ void Disassemble8086(std::vector<u8>& buffer)
 
 	u8* instructions = &buffer[0];
 
-	u32 Offset = 0;
-	while (Offset < buffer.size()) {
-		instruction Decoded;
-		Sim86_Decode8086Instruction(buffer.size() - Offset, instructions + Offset, &Decoded);
-		if (Decoded.Op) {
-			Offset += Decoded.Size;
-			PrintInstruction(Decoded, stdout);
+	u32 offset = 0;
+	while (offset < buffer.size()) {
+		instruction decoded;
+		Sim86_Decode8086Instruction(buffer.size() - offset, instructions + offset, &decoded);
+		if (decoded.Op) {
+			offset += decoded.Size;
+			PrintInstruction(decoded, stdout);
 			printf("\n");
 		}
 		else {
