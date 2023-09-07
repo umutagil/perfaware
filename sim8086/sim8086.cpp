@@ -31,31 +31,8 @@ enum RegisterType : u8
 	Register_count,
 };
 
-class RegisterInfo
-{
-	public:
-		inline u16 GetValue() const
-		{
-			return value;
-		}
-
-		inline void SetValue(const u16 newValue)
-		{
-			value = newValue;
-			modified = true;
-		}
-
-		inline bool IsModified()
-		{
-			return modified;
-		}
-
-	private:
-		u16 value = 0;
-		bool modified = false;
-};
-
-RegisterInfo registers[Register_count];
+u16 registers[Register_count];
+bool registerPrintFlags[Register_count];
 
 const u8 CF = 1;
 const u8 PF = 1 << 1;
@@ -111,34 +88,34 @@ ExecutionInfo ExecuteMov(const instruction& decodedInstruction)
 		case Operand_Immediate: {
 			const u16 immVal = secondOperand.Immediate.Value & 0xFFFF;
 			if (wide) {
-				registers[targetReg.Index].SetValue(immVal);
+				registers[targetReg.Index] = immVal;
 			}
 			else {
-				const u16 targetVal = registers[targetReg.Index].GetValue();
+				const u16 targetVal = registers[targetReg.Index];
 				const u16 source = immVal & 0xFF;
 				const bool isTargetHigh = targetReg.Offset & 1;
 				const u16 result = isTargetHigh ? (targetVal & 0x00FF) | (source << 8) : (targetVal & 0xFF00) | source;
-				registers[targetReg.Index].SetValue(result);
+				registers[targetReg.Index] = result;
 			}
 
 			break;
 		}
 		case Operand_Register: {
 			const register_access sourceReg = decodedInstruction.Operands[1].Register;
-			const u16 sourceVal = registers[sourceReg.Index].GetValue();
+			const u16 sourceVal = registers[sourceReg.Index];
 
 			if (wide) {
-				registers[targetReg.Index].SetValue(sourceVal);
+				registers[targetReg.Index] = sourceVal;
 			}
 			else {
 				assert(sourceReg.Count == 1);
 
 				const bool isTargetHigh = targetReg.Offset & 1;
 				const bool isSourceHigh = sourceReg.Offset & 1;
-				const u16 targetVal = registers[targetReg.Index].GetValue();
+				const u16 targetVal = registers[targetReg.Index];
 				const u16 source = isSourceHigh ? ((sourceVal & 0xFF00) >> 8) : (sourceVal & 0x00FF);
 				const u16 result = isTargetHigh ? (targetVal & 0x00FF) | (source << 8) : (targetVal & 0xFF00) | source;
-				registers[targetReg.Index].SetValue(result);
+				registers[targetReg.Index] = result;
 			}
 
 			break;
@@ -159,7 +136,7 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 	const bool wide = decodedInstruction.Flags & Inst_Wide;
 
 	const register_access targetReg = decodedInstruction.Operands[0].Register;
-	const s16 targetVal = static_cast<s16>(registers[targetReg.Index].GetValue());
+	const s16 targetVal = static_cast<s16>(registers[targetReg.Index]);
 	assert(targetReg.Count == static_cast<u32>(wide) + 1);
 
 	const instruction_operand secondOperand = decodedInstruction.Operands[1];
@@ -167,7 +144,7 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 
 	const s16 sourceVal = (secondOperand.Type == Operand_Immediate) ?
 							secondOperand.Immediate.Value & 0xFFFF :
-							static_cast<s16>(registers[secondOperand.Register.Index].GetValue());
+							static_cast<s16>(registers[secondOperand.Register.Index]);
 
 	bool overflow = false;
 	bool auxCarry = false;
@@ -178,7 +155,7 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 			result = ToU32(targetVal) + ToU32(sourceVal);
 			overflow = CheckOverflow(targetVal, sourceVal, static_cast<s16>(result));
 			auxCarry = ((targetVal & 0x0F) + (sourceVal & 0x0F)) & 0x10;
-			registers[targetReg.Index].SetValue(static_cast<u16>(result & 0x0000FFFF));
+			registers[targetReg.Index] = static_cast<u16>(result & 0x0000FFFF);
 			executionInfo.modifiedRegister = static_cast<RegisterType>(targetReg.Index);
 			break;
 		}
@@ -186,7 +163,7 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 			result = ToU32(targetVal) - ToU32(sourceVal);
 			overflow = CheckOverflow(targetVal, -sourceVal, static_cast<s16>(result));
 			auxCarry = ((targetVal & 0x0F) - (sourceVal & 0x0F)) & 0x10;
-			registers[targetReg.Index].SetValue(static_cast<u16>(result & 0x0000FFFF));
+			registers[targetReg.Index] = static_cast<u16>(result & 0x0000FFFF);
 			executionInfo.modifiedRegister = static_cast<RegisterType>(targetReg.Index);
 			break;
 		}
@@ -200,14 +177,13 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 			break;
 	}
 
-	u16 flags = registers[Register_flags].GetValue();
+	u16& flags = registers[Register_flags];
 	setBitFlag(flags, ZF, (static_cast<u16>(result) == 0));
 	setBitFlag(flags, SF, (result & 0x8000));
 	setBitFlag(flags, OF, overflow);
 	setBitFlag(flags, AF, auxCarry);
 	setBitFlag(flags, CF, (result & 0x00010000));
 	setBitFlag(flags, PF, CheckParity(result));
-	registers[Register_flags].SetValue(flags);
 	executionInfo.flagModified = true;
 
 	return executionInfo;
@@ -221,23 +197,23 @@ ExecutionInfo ExecuteJump(const instruction& decodedInstruction)
 
 	switch (decodedInstruction.Op) {
 		case Op_je:
-			jump = (registers[Register_flags].GetValue() & ZF);
+			jump = (registers[Register_flags] & ZF);
 			break;
 		case Op_jne:
-			jump = !(registers[Register_flags].GetValue() & ZF);
+			jump = !(registers[Register_flags] & ZF);
 			break;
 		case Op_jp:
-			jump = (registers[Register_flags].GetValue() & PF);
+			jump = (registers[Register_flags] & PF);
 			break;
 		case Op_jb:
-			jump = (registers[Register_flags].GetValue() & CF);
+			jump = (registers[Register_flags] & CF);
 			break;
 		case Op_loopnz: {
-			u16 cx = registers[Register_c].GetValue() - 1;
-			registers[Register_c].SetValue(cx);
+			u16 cx = registers[Register_c] - 1;
+			registers[Register_c] = cx;
 			executionInfo.modifiedRegister = Register_c;
 
-			jump = (cx != 0) && (!(registers[Register_flags].GetValue() & ZF));
+			jump = (cx != 0) && (!(registers[Register_flags] & ZF));
 			break;
 		}
 		default:
@@ -249,12 +225,11 @@ ExecutionInfo ExecuteJump(const instruction& decodedInstruction)
 	}
 
 	const s16 jumpOffset = static_cast<s16>(decodedInstruction.Operands[0].Immediate.Value);
-	const s16 ip = static_cast<s16>(registers[Register_ip].GetValue());
-	registers[Register_ip].SetValue(static_cast<u16>(ip + jumpOffset));
+	const s16 ip = static_cast<s16>(registers[Register_ip]);
+	registers[Register_ip] = static_cast<u16>(ip + jumpOffset);
 
 	return executionInfo;
 }
-
 
 ExecutionInfo ExecuteInstruction(const instruction& decodedInstruction)
 {
@@ -296,21 +271,22 @@ std::string GetActiveFlagNames(const u16 bitFlags)
 	return result;
 }
 
-void PrintExecutionState(const ExecutionInfo modifyInfo, const RegisterInfo (&backupRegisters)[Register_count], FILE* Dest)
+void PrintExecutionState(const ExecutionInfo modifyInfo, const u16 (&backupRegisters)[Register_count], FILE* Dest)
 {
 	fprintf(Dest, " ;");
 
 	if (modifyInfo.modifiedRegister != Register_none) {
+		registerPrintFlags[modifyInfo.modifiedRegister] = true;
 		register_access reg = { modifyInfo.modifiedRegister, 0, 2 };
 		fprintf(Dest, " %s:", Sim86_RegisterNameFromOperand(&reg));
-		fprintf(Dest, "0x%x->0x%x", backupRegisters[reg.Index].GetValue(), registers[reg.Index].GetValue());
+		fprintf(Dest, "0x%x->0x%x", backupRegisters[reg.Index], registers[reg.Index]);
 	}
 
 	// Print ip register
-	fprintf(Dest, " ip:0x%x->0x%x", backupRegisters[Register_ip].GetValue(), registers[Register_ip].GetValue());
+	fprintf(Dest, " ip:0x%x->0x%x", backupRegisters[Register_ip], registers[Register_ip]);
 
-	const u16 flags = registers[Register_flags].GetValue();
-	const u16 backupFlags = backupRegisters[Register_flags].GetValue();
+	const u16 flags = registers[Register_flags];
+	const u16 backupFlags = backupRegisters[Register_flags];
 	if (modifyInfo.flagModified) {
 		fprintf(Dest, " flags:%s->%s", GetActiveFlagNames(backupFlags).c_str(), GetActiveFlagNames(flags).c_str());
 	}
@@ -323,16 +299,16 @@ void PrintFinalState(FILE* Dest)
 	fprintf(Dest, "Final Registers:\n");
 
 	for (u16 i = 1; i < Register_flags; ++i) {
-		if (!registers[i].IsModified()) {
+		if (!registerPrintFlags[i]) {
 			continue;
 		}
 
 		register_access reg{ i, 0 , 2 };
-		fprintf(Dest, "      %s: 0x%.4x (%d)\n", Sim86_RegisterNameFromOperand(&reg), registers[i].GetValue(), registers[i].GetValue());
+		fprintf(Dest, "      %s: 0x%.4x (%d)\n", Sim86_RegisterNameFromOperand(&reg), registers[i], registers[i]);
 	}
 
 
-	const u16 flags = registers[Register_flags].GetValue();
+	const u16 flags = registers[Register_flags];
 	fprintf(Dest, "   flags: %s\n", GetActiveFlagNames(flags).c_str());
 }
 
@@ -341,9 +317,9 @@ void Execute8086(std::vector<u8>& buffer)
 {
 	u8* instructions = &buffer[0];
 	const u32 bufferSize = static_cast<u32>(buffer.size());
+	u16& ip = registers[Register_ip];
 
-	while (registers[Register_ip].GetValue() < bufferSize) {
-		const u16 ip = registers[Register_ip].GetValue();
+	while (ip < bufferSize) {
 		instruction decoded;
 		Sim86_Decode8086Instruction(bufferSize - ip, instructions + ip, &decoded);
 
@@ -352,15 +328,11 @@ void Execute8086(std::vector<u8>& buffer)
 			break;
 		}
 
-		if (decoded.Operands[0].Type == Operand_Memory) {
-			printf("Not implemented.\n");
-			break;
-		}
+		u16 registersBeforeExecution[Register_count];
+		std::memcpy(registersBeforeExecution, registers, Register_count * sizeof(u16));
 
-		RegisterInfo registersBeforeExecution[Register_count];
-		std::memcpy(registersBeforeExecution, registers, Register_count * sizeof(RegisterInfo));
-
-		registers[Register_ip].SetValue(ip + decoded.Size);
+		ip += static_cast<u16>(decoded.Size);
+		registerPrintFlags[Register_ip] = true;
 
 		PrintInstruction(decoded, stdout);
 		const ExecutionInfo modifications = ExecuteInstruction(decoded);
