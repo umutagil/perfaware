@@ -41,7 +41,7 @@ const u8 ZF = 1 << 3;
 const u8 SF = 1 << 4;
 const u8 OF = 1 << 5;
 
-u8 simMemory[1024 * 1024];
+u8 simMemory[64 * 1024];
 
 constexpr u32 ToU32(const s16 value)
 {
@@ -242,6 +242,7 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 				break;
 			}
 			default:
+				printf("Invalid operand type\n");
 				break;
 		}
 	}
