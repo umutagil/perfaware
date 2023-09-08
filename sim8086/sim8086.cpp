@@ -41,7 +41,8 @@ const u8 ZF = 1 << 3;
 const u8 SF = 1 << 4;
 const u8 OF = 1 << 5;
 
-u8 simMemory[64 * 1024];
+u8* simMemory;
+const u32 memSize = 64 * 1024;
 
 constexpr u32 ToU32(const s16 value)
 {
@@ -384,13 +385,15 @@ void PrintFinalState(FILE* Dest)
 
 void Execute8086(std::vector<u8>& buffer)
 {
-	u8* instructions = &buffer[0];
-	const u32 bufferSize = static_cast<u32>(buffer.size());
+	const u32 instructionSize = static_cast<u32>(buffer.size());
+	buffer.resize(memSize);
+	simMemory = buffer.data();
+
 	u16& ip = registers[Register_ip];
 
-	while (ip < bufferSize) {
+	while (ip < instructionSize) {
 		instruction decoded;
-		Sim86_Decode8086Instruction(bufferSize - ip, instructions + ip, &decoded);
+		Sim86_Decode8086Instruction(instructionSize - ip, &simMemory[ip], &decoded);
 
 		if (!decoded.Op) {
 			printf("Unrecognized instruction.\n");
@@ -434,6 +437,17 @@ void Disassemble8086(std::vector<u8>& buffer)
 	}
 }
 
+void DumpMemoryToFile(const std::string& fileName)
+{
+	std::basic_ofstream<u8> stream{ fileName, stream.binary};
+	if (!stream.is_open()) {
+		std::cout << "Failed to open!" << std::endl;
+		return;
+	}
+
+	stream.write(simMemory, memSize);
+}
+
 int main(int argc, char* argv[])
 {
 	if (argc < 3) {
@@ -450,6 +464,7 @@ int main(int argc, char* argv[])
 
 	char* fileName = argv[1];
 	char* runMode = argv[2];
+	const bool dump = (argc == 4) && (strcmp(argv[3], "-dump") == 0);
 
 	std::basic_ifstream<u8> stream{ fileName, stream.binary};
 	if (!stream.is_open()) {
@@ -464,6 +479,10 @@ int main(int argc, char* argv[])
 	}
 	else if (strcmp(runMode, "-exec") == 0) {
 		Execute8086(buffer);
+
+		if (dump) {
+			DumpMemoryToFile("sim86_memory_0.data");
+		}
 	}
 
 	return 0;
