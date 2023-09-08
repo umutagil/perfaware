@@ -41,9 +41,22 @@ const u8 ZF = 1 << 3;
 const u8 SF = 1 << 4;
 const u8 OF = 1 << 5;
 
+u8 simMemory[1024 * 1024];
+
 constexpr u32 ToU32(const s16 value)
 {
 	return static_cast<u32>(static_cast<u16>(value));
+}
+
+enum class BitSelection : u8
+{
+	Lower,
+	Upper,
+};
+
+inline u8 GetBits(const u16 val, const BitSelection selection)
+{
+	return (selection == BitSelection::Lower) ? static_cast<u8>(val) : static_cast<u8>(val >> 8);
 }
 
 /**
@@ -55,7 +68,7 @@ struct ExecutionInfo
 	bool flagModified = false;
 };
 
-void setBitFlag(u16& bitflags, const u8 flag, const bool set)
+void SetBitFlag(u16& bitflags, const u8 flag, const bool set)
 {
 	bitflags = set ? (bitflags | flag) : (bitflags & ~flag);
 }
@@ -74,57 +87,105 @@ bool CheckParity(const u32 val)
 	return (count % 2) == 0;
 }
 
+u16 GetAddress(const effective_address_expression& expression)
+{
+	assert(ArrayCount(expression.Terms) <= 2);
+	bool HasTerms = false;
+	u16 address = 0;
+
+	for (size_t idx = 0; idx < ArrayCount(expression.Terms); ++idx) {
+		const RegisterType regType = static_cast<RegisterType>(expression.Terms[idx].Register.Index);
+		if (regType != Register_none) {
+			address += registers[regType];
+			HasTerms = true;
+		}
+		else {
+			address += static_cast<u16>(expression.Displacement);
+		}
+	}
+
+	if (!HasTerms) {
+		return expression.Displacement;
+	}
+
+	return address;
+}
+
+void WriteToAddress(const u16 address, const u16 val, const bool wide)
+{
+	if (!wide) {
+		simMemory[address] = GetBits(val, BitSelection::Lower);
+		return;
+	}
+
+	simMemory[address] = GetBits(val, BitSelection::Lower);
+	simMemory[address + 1] = GetBits(val, BitSelection::Upper);
+}
+
+u16 GetOperandValue(const instruction_operand operand, const bool wide)
+{
+	switch (operand.Type) {
+		case Operand_Immediate:
+			return operand.Immediate.Value & 0xFFFF;
+		case Operand_Register: {
+			const register_access reg = operand.Register;
+			assert(reg.Count == static_cast<u32>(wide) + 1);
+
+			const u16 regVal = registers[reg.Index];
+			return wide ? regVal : GetBits(regVal, static_cast<BitSelection>(reg.Offset & 1));
+		}
+		case Operand_Memory: {
+			const u16 address = GetAddress(operand.Address);
+			u16 val = simMemory[address];
+			if (wide) {
+				val += static_cast<u16>(simMemory[address + 1]) << 8;
+			}
+			return val;
+		}
+		case Operand_None:
+			printf("Invalid operand type\n");
+			return 0;
+	}
+}
+
 ExecutionInfo ExecuteMov(const instruction& decodedInstruction)
 {
 	assert(decodedInstruction.Op == Op_mov);
 
+	ExecutionInfo execInfo;
 	const bool wide = decodedInstruction.Flags & Inst_Wide;
+	const u16 sourceVal = GetOperandValue(decodedInstruction.Operands[1], wide);
+	const instruction_operand target = decodedInstruction.Operands[0];
 
-	const register_access targetReg = decodedInstruction.Operands[0].Register;
-	assert(targetReg.Count == static_cast<u32>(wide) + 1);
+	switch (target.Type) {
+		case Operand_Register: {
+			const register_access targetReg = target.Register;
+			assert(targetReg.Count == static_cast<u32>(wide) + 1);
+			u16& targetVal = registers[targetReg.Index];
 
-	instruction_operand secondOperand = decodedInstruction.Operands[1];
-	switch (secondOperand.Type) {
-		case Operand_Immediate: {
-			const u16 immVal = secondOperand.Immediate.Value & 0xFFFF;
 			if (wide) {
-				registers[targetReg.Index] = immVal;
+				targetVal = sourceVal;
 			}
 			else {
-				const u16 targetVal = registers[targetReg.Index];
-				const u16 source = immVal & 0xFF;
-				const bool isTargetHigh = targetReg.Offset & 1;
-				const u16 result = isTargetHigh ? (targetVal & 0x00FF) | (source << 8) : (targetVal & 0xFF00) | source;
-				registers[targetReg.Index] = result;
+				const bool high = targetReg.Offset & 1;
+				targetVal = high ?
+							GetBits(targetVal, BitSelection::Lower) | (sourceVal << 8) :
+							GetBits(targetVal, BitSelection::Upper) | sourceVal;
 			}
 
+			execInfo.modifiedRegister = static_cast<RegisterType>(targetReg.Index);
 			break;
 		}
-		case Operand_Register: {
-			const register_access sourceReg = decodedInstruction.Operands[1].Register;
-			const u16 sourceVal = registers[sourceReg.Index];
-
-			if (wide) {
-				registers[targetReg.Index] = sourceVal;
-			}
-			else {
-				assert(sourceReg.Count == 1);
-
-				const bool isTargetHigh = targetReg.Offset & 1;
-				const bool isSourceHigh = sourceReg.Offset & 1;
-				const u16 targetVal = registers[targetReg.Index];
-				const u16 source = isSourceHigh ? ((sourceVal & 0xFF00) >> 8) : (sourceVal & 0x00FF);
-				const u16 result = isTargetHigh ? (targetVal & 0x00FF) | (source << 8) : (targetVal & 0xFF00) | source;
-				registers[targetReg.Index] = result;
-			}
-
+		case Operand_Memory: {
+			const u16 address = GetAddress(target.Address);
+			WriteToAddress(address, sourceVal, wide);
 			break;
 		}
 		default:
 			printf("Unimplemented operand type\n");
 	}
 
-	return { static_cast<RegisterType>(targetReg.Index), false };
+	return execInfo;
 }
 
 ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
@@ -132,39 +193,31 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 	assert((decodedInstruction.Op == Op_add) || (decodedInstruction.Op == Op_sub) || (decodedInstruction.Op == Op_cmp));
 
 	ExecutionInfo executionInfo;
-
 	const bool wide = decodedInstruction.Flags & Inst_Wide;
 
-	const register_access targetReg = decodedInstruction.Operands[0].Register;
-	const s16 targetVal = static_cast<s16>(registers[targetReg.Index]);
-	assert(targetReg.Count == static_cast<u32>(wide) + 1);
-
+	const instruction_operand firstOperand = decodedInstruction.Operands[0];
 	const instruction_operand secondOperand = decodedInstruction.Operands[1];
-	assert(secondOperand.Type == Operand_Immediate || secondOperand.Type == Operand_Register);
-
-	const s16 sourceVal = (secondOperand.Type == Operand_Immediate) ?
-							secondOperand.Immediate.Value & 0xFFFF :
-							static_cast<s16>(registers[secondOperand.Register.Index]);
+	const s16 targetVal = static_cast<s16>(GetOperandValue(firstOperand, wide));
+	const s16 sourceVal = static_cast<s16>(GetOperandValue(secondOperand, wide));
 
 	bool overflow = false;
 	bool auxCarry = false;
 
+	bool writesResult = false;
 	u32 result = 0;
 	switch (decodedInstruction.Op) {
 		case Op_add: {
 			result = ToU32(targetVal) + ToU32(sourceVal);
 			overflow = CheckOverflow(targetVal, sourceVal, static_cast<s16>(result));
 			auxCarry = ((targetVal & 0x0F) + (sourceVal & 0x0F)) & 0x10;
-			registers[targetReg.Index] = static_cast<u16>(result & 0x0000FFFF);
-			executionInfo.modifiedRegister = static_cast<RegisterType>(targetReg.Index);
+			writesResult = true;
 			break;
 		}
 		case Op_sub: {
 			result = ToU32(targetVal) - ToU32(sourceVal);
 			overflow = CheckOverflow(targetVal, -sourceVal, static_cast<s16>(result));
 			auxCarry = ((targetVal & 0x0F) - (sourceVal & 0x0F)) & 0x10;
-			registers[targetReg.Index] = static_cast<u16>(result & 0x0000FFFF);
-			executionInfo.modifiedRegister = static_cast<RegisterType>(targetReg.Index);
+			writesResult = true;
 			break;
 		}
 		case Op_cmp:
@@ -177,13 +230,29 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 			break;
 	}
 
+	if (writesResult) {
+		switch (firstOperand.Type) {
+			case Operand_Register:
+				registers[firstOperand.Register.Index] = static_cast<u16>(result & 0x0000FFFF);
+				executionInfo.modifiedRegister = static_cast<RegisterType>(firstOperand.Register.Index);
+				break;
+			case Operand_Memory: {
+				const u16 address = GetAddress(firstOperand.Address);
+				WriteToAddress(address, sourceVal, wide);
+				break;
+			}
+			default:
+				break;
+		}
+	}
+
 	u16& flags = registers[Register_flags];
-	setBitFlag(flags, ZF, (static_cast<u16>(result) == 0));
-	setBitFlag(flags, SF, (result & 0x8000));
-	setBitFlag(flags, OF, overflow);
-	setBitFlag(flags, AF, auxCarry);
-	setBitFlag(flags, CF, (result & 0x00010000));
-	setBitFlag(flags, PF, CheckParity(result));
+	SetBitFlag(flags, ZF, (static_cast<u16>(result) == 0));
+	SetBitFlag(flags, SF, (result & 0x8000));
+	SetBitFlag(flags, OF, overflow);
+	SetBitFlag(flags, AF, auxCarry);
+	SetBitFlag(flags, CF, (result & 0x00010000));
+	SetBitFlag(flags, PF, CheckParity(result));
 	executionInfo.flagModified = true;
 
 	return executionInfo;
@@ -282,7 +351,6 @@ void PrintExecutionState(const ExecutionInfo modifyInfo, const u16 (&backupRegis
 		fprintf(Dest, "0x%x->0x%x", backupRegisters[reg.Index], registers[reg.Index]);
 	}
 
-	// Print ip register
 	fprintf(Dest, " ip:0x%x->0x%x", backupRegisters[Register_ip], registers[Register_ip]);
 
 	const u16 flags = registers[Register_flags];
