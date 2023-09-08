@@ -279,14 +279,16 @@ ExecutionInfo ExecuteJump(const instruction& decodedInstruction)
 		case Op_jb:
 			jump = (registers[Register_flags] & CF);
 			break;
-		case Op_loopnz: {
-			u16 cx = registers[Register_c] - 1;
-			registers[Register_c] = cx;
+		case Op_loop:
+			registers[Register_c]--;
+			jump = (registers[Register_c] != 0);
 			executionInfo.modifiedRegister = Register_c;
-
-			jump = (cx != 0) && (!(registers[Register_flags] & ZF));
 			break;
-		}
+		case Op_loopnz:
+			registers[Register_c]--;
+			jump = (registers[Register_c] != 0) && (!(registers[Register_flags] & ZF));
+			executionInfo.modifiedRegister = Register_c;
+			break;
 		default:
 			break;
 	}
@@ -318,6 +320,7 @@ ExecutionInfo ExecuteInstruction(const instruction& decodedInstruction)
 		case Op_jp:
 		case Op_jb:
 		case Op_loopnz:
+		case Op_loop:
 			return ExecuteJump(decodedInstruction);
 			break;
 		default:
