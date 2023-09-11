@@ -91,22 +91,13 @@ bool CheckParity(const u32 val)
 u16 GetAddress(const effective_address_expression& expression)
 {
 	assert(ArrayCount(expression.Terms) <= 2);
-	bool HasTerms = false;
-	u16 address = 0;
+	u16 address = static_cast<u16>(expression.Displacement);
 
 	for (size_t idx = 0; idx < ArrayCount(expression.Terms); ++idx) {
 		const RegisterType regType = static_cast<RegisterType>(expression.Terms[idx].Register.Index);
 		if (regType != Register_none) {
 			address += registers[regType];
-			HasTerms = true;
 		}
-		else {
-			address += static_cast<u16>(expression.Displacement);
-		}
-	}
-
-	if (!HasTerms) {
-		return expression.Displacement;
 	}
 
 	return address;
