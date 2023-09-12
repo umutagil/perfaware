@@ -11,7 +11,7 @@
 // Register mapping from Muratori's implementation.
 enum RegisterType : u8
 {
-	Register_none,
+	Register_none = 0,
 
 	Register_a,
 	Register_b,
@@ -43,6 +43,13 @@ const u8 OF = 1 << 5;
 
 u8* simMemory;
 const u32 memSize = 64 * 1024;
+
+struct CycleEstimation
+{
+	u32 directCycle = 0;
+	u32 eaCycle = 0;
+	u32 penalty = 0;
+};
 
 constexpr u32 ToU32(const s16 value)
 {
@@ -300,12 +307,10 @@ ExecutionInfo ExecuteInstruction(const instruction& decodedInstruction)
 	switch (decodedInstruction.Op) {
 		case Op_mov:
 			return ExecuteMov(decodedInstruction);
-			break;
 		case Op_cmp:
 		case Op_add:
 		case Op_sub:
 			return ExecuteArithmetic(decodedInstruction);
-			break;
 		case Op_je:
 		case Op_jne:
 		case Op_jp:
@@ -313,7 +318,6 @@ ExecutionInfo ExecuteInstruction(const instruction& decodedInstruction)
 		case Op_loopnz:
 		case Op_loop:
 			return ExecuteJump(decodedInstruction);
-			break;
 		default:
 			printf("Unimplemented operation type\n");
 			break;
@@ -376,6 +380,116 @@ void PrintFinalState(FILE* Dest)
 	fprintf(Dest, "   flags: %s\n", GetActiveFlagNames(flags).c_str());
 }
 
+u32 ComputeEACycleCount(const effective_address_expression expression)
+{
+	const bool hasDisplacement = expression.Displacement != 0;
+	RegisterType baseReg = Register_none;
+	RegisterType idxReg = Register_none;
+
+	for (size_t idx = 0; idx < ArrayCount(expression.Terms); ++idx) {
+		const RegisterType regType = static_cast<RegisterType>(expression.Terms[idx].Register.Index);
+		if ((regType == Register_b) || (regType == Register_bp)) {
+			baseReg = regType;
+		}
+		else if ((regType == Register_si) || (regType == Register_di)) {
+			idxReg = regType;
+		}
+	}
+
+	if (!baseReg && !idxReg) {
+		assert(hasDisplacement);
+		return 6;
+	}
+
+	u32 cycleCount = 0;
+
+	if (!baseReg ^ !idxReg) {
+		cycleCount = 5;
+	}
+	else if ((baseReg == Register_bp && idxReg == Register_di) || (baseReg == Register_b && idxReg == Register_si)) {
+		cycleCount = 7;
+	}
+	else {
+		cycleCount = 8;
+	}
+
+	if (hasDisplacement) {
+		cycleCount += 4;
+	}
+
+	return cycleCount;
+}
+
+CycleEstimation EstimateCycle(const instruction& decodedInstruction)
+{
+	CycleEstimation result;
+
+	const instruction_operand operand0 = decodedInstruction.Operands[0];
+	const instruction_operand operand1 = decodedInstruction.Operands[1];
+	const operand_type type0 = operand0.Type;
+	const operand_type type1 = operand1.Type;
+
+	const bool acc = ((type0 == Operand_Register) && (operand0.Register.Index == Register_a))
+					|| ((type1 == Operand_Register) && (operand1.Register.Index == Register_a));
+
+	u32 penaltyCoeff = 0;
+
+	switch (decodedInstruction.Op) {
+		case Op_mov: {
+			if (type0 == Operand_Register) {
+				if (type1 == Operand_Register) {
+					result.directCycle = 2;
+				}
+				else if (type1 == Operand_Immediate) {
+					result.directCycle = 4;
+				}
+				else if (type1 == Operand_Memory) {
+					result.directCycle = acc ? 10 : 8;
+					result.eaCycle = acc ? 0 : ComputeEACycleCount(operand1.Address);
+					result.penalty = (GetAddress(operand1.Address) % 2) * 4;
+				}
+			}
+			else if (type0 == Operand_Memory) {
+				result.penalty = (GetAddress(operand1.Address) % 2) * 4;
+				result.eaCycle = acc ? 0 : ComputeEACycleCount(operand0.Address);
+				if (type1 == Operand_Register) {
+					result.directCycle = acc ? 10 : 9;
+				}
+				else if (type1 == Operand_Immediate) {
+					result.directCycle = 10;
+				}
+			}
+			break;
+		}
+		case Op_sub:
+		case Op_add: {
+			if (type0 == Operand_Register) {
+				if (type1 == Operand_Register) {
+					result.directCycle = 3;
+				}
+				else if (type1 == Operand_Immediate) {
+					result.directCycle = 4;
+				}
+				else if (type1 == Operand_Memory) {
+					const u32 penalty = (GetAddress(operand1.Address) % 2) * 4;
+					result = { 9, ComputeEACycleCount(operand1.Address), penalty};
+				}
+			}
+			else if (type0 == Operand_Memory) {
+				result.penalty = (GetAddress(operand0.Address) % 2) * 2 * 4;
+				result.eaCycle = ComputeEACycleCount(operand0.Address);
+				result.directCycle = (type1 == Operand_Register) ? 16 : 17;
+			}
+
+			break;
+		}
+		default:
+			printf("Unimplemented operation type\n");
+			break;
+	}
+
+	return result;
+}
 
 void Execute8086(std::vector<u8>& buffer)
 {
@@ -442,6 +556,48 @@ void DumpMemoryToFile(const std::string& fileName)
 	stream.write(simMemory, memSize);
 }
 
+void EstimateClocks(std::vector<u8>& buffer)
+{
+	u8* instructions = &buffer[0];
+	const u32 bufferSize = static_cast<u32>(buffer.size());
+
+	u32 totalCycleCount = 0;
+
+	u32 offset = 0;
+	while (offset < bufferSize) {
+		instruction decoded;
+		Sim86_Decode8086Instruction(bufferSize - offset, instructions + offset, &decoded);
+		if (! decoded.Op) {
+			printf("Unrecognized instruction\n");
+			break;
+		}
+
+		offset += decoded.Size;
+		PrintInstruction(decoded, stdout);
+
+		fprintf(stdout, " ;");
+
+		const CycleEstimation cycleCount = EstimateCycle(decoded);
+		const u32 instructionCycleCount = cycleCount.directCycle + cycleCount.eaCycle + cycleCount.penalty;
+		totalCycleCount += instructionCycleCount;
+		fprintf(stdout, " Clocks: +%d = %d", instructionCycleCount, totalCycleCount);
+
+		std::string detailedCycleInfo;
+		if (cycleCount.eaCycle) {
+			fprintf(stdout, " (%d + %dea", cycleCount.directCycle, cycleCount.eaCycle);
+
+			if (cycleCount.penalty) {
+				fprintf(stdout, " + %dp", cycleCount.penalty);
+			}
+
+			fprintf(stdout, ")");
+		}
+
+		fprintf(stdout, "\n");
+	}
+
+}
+
 int main(int argc, char* argv[])
 {
 	if (argc < 3) {
@@ -477,6 +633,9 @@ int main(int argc, char* argv[])
 		if (dump) {
 			DumpMemoryToFile("sim86_memory_0.data");
 		}
+	}
+	else if (strcmp(runMode, "-showclocks") == 0) {
+		EstimateClocks(buffer);
 	}
 
 	return 0;
