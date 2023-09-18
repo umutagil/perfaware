@@ -568,6 +568,11 @@ void Execute8086(std::vector<u8>& buffer)
 			break;
 		}
 
+		if (decoded.Op == Op_ret || decoded.Op == Op_retf) {
+			printf("Return instruction.\n");
+			break;
+		}
+
 		u16 registersBeforeExecution[Register_count];
 		std::memcpy(registersBeforeExecution, registers, Register_count * sizeof(u16));
 
