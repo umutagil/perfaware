@@ -311,11 +311,61 @@ ExecutionInfo ExecuteJump(const instruction& decodedInstruction)
 	return executionInfo;
 }
 
+ExecutionInfo ExecuteLogical(const instruction& decodedInstruction)
+{
+	ExecutionInfo executionInfo;
+	const bool wide = decodedInstruction.Flags & Inst_Wide;
+
+	const instruction_operand firstOperand = decodedInstruction.Operands[0];
+	const instruction_operand secondOperand = decodedInstruction.Operands[1];
+	const s16 targetVal = static_cast<s16>(GetOperandValue(firstOperand, wide));
+	const s16 sourceVal = static_cast<s16>(GetOperandValue(secondOperand, wide));
+
+	bool writesResult = false;
+	u16 result = 0;
+	switch (decodedInstruction.Op) {
+		case Op_xor:
+			result = targetVal ^ sourceVal;
+			writesResult = true;
+			break;
+	}
+
+	if (writesResult) {
+		switch (firstOperand.Type) {
+		case Operand_Register:
+			registers[firstOperand.Register.Index] = result & 0x0000FFFF;
+			executionInfo.modifiedRegister = static_cast<RegisterType>(firstOperand.Register.Index);
+			break;
+		case Operand_Memory: {
+			const u16 address = GetAddress(firstOperand.Address);
+			WriteToAddress(address, sourceVal, wide);
+			break;
+		}
+		default:
+			printf("Invalid operand type\n");
+			break;
+		}
+	}
+
+	u16& flags = registers[Register_flags];
+	SetBitFlag(flags, ZF, (result == 0));
+	SetBitFlag(flags, SF, (result & 0x8000));
+	SetBitFlag(flags, OF, false);
+	SetBitFlag(flags, AF, false);
+	SetBitFlag(flags, CF, false);
+	SetBitFlag(flags, PF, CheckParity(result));
+	executionInfo.flagModified = true;
+
+	return executionInfo;
+}
+
 ExecutionInfo ExecuteInstruction(const instruction& decodedInstruction)
 {
 	switch (decodedInstruction.Op) {
 		case Op_mov:
 			return ExecuteMov(decodedInstruction);
+		case Op_xor:
+			return ExecuteLogical(decodedInstruction);
 		case Op_cmp:
 		case Op_add:
 		case Op_sub:
