@@ -189,8 +189,6 @@ ExecutionInfo ExecuteMov(const instruction& decodedInstruction)
 
 ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 {
-	assert((decodedInstruction.Op == Op_add) || (decodedInstruction.Op == Op_sub) || (decodedInstruction.Op == Op_cmp));
-
 	ExecutionInfo executionInfo;
 	const bool wide = decodedInstruction.Flags & Inst_Wide;
 
@@ -201,6 +199,7 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 
 	bool overflow = false;
 	bool auxCarry = false;
+	bool skipCF = false;
 
 	bool writesResult = false;
 	u32 result = 0;
@@ -209,6 +208,14 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 			result = ToU32(targetVal) + ToU32(sourceVal);
 			overflow = CheckOverflow(targetVal, sourceVal, static_cast<s16>(result));
 			auxCarry = ((targetVal & 0x0F) + (sourceVal & 0x0F)) & 0x10;
+			writesResult = true;
+			break;
+		}
+		case Op_inc: {
+			result = ToU32(targetVal) + u32(1);
+			overflow = CheckOverflow(targetVal, sourceVal, static_cast<s16>(result));
+			auxCarry = ((targetVal & 0x0F) + (sourceVal & 0x0F)) & 0x10;
+			skipCF = true;
 			writesResult = true;
 			break;
 		}
@@ -251,8 +258,10 @@ ExecutionInfo ExecuteArithmetic(const instruction& decodedInstruction)
 	SetBitFlag(flags, SF, (result & 0x8000));
 	SetBitFlag(flags, OF, overflow);
 	SetBitFlag(flags, AF, auxCarry);
-	SetBitFlag(flags, CF, (result & 0x00010000));
 	SetBitFlag(flags, PF, CheckParity(result));
+	if (!skipCF) {
+		SetBitFlag(flags, CF, (result & 0x00010000));
+	}
 	executionInfo.flagModified = true;
 
 	return executionInfo;
@@ -310,6 +319,7 @@ ExecutionInfo ExecuteInstruction(const instruction& decodedInstruction)
 		case Op_cmp:
 		case Op_add:
 		case Op_sub:
+		case Op_inc:
 			return ExecuteArithmetic(decodedInstruction);
 		case Op_je:
 		case Op_jne:
