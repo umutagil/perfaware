@@ -7,21 +7,24 @@
 #include <random>
 #include <string>
 #include <format>
-#include <chrono>
 #include <filesystem>
 
 #include "haversine_formula.h"
 #include "parser.h"
+#include "platform_metrics.h"
 
 std::random_device randomDevice;
 std::mt19937_64 generator(randomDevice());
 std::uniform_real_distribution<f64> distGlobalX(-180.0, 180.0);
 std::uniform_real_distribution<f64> distGlobalY(-90.0, 90.0);
 
-const char* DATA_FILE_NAME = "haversine_data.json";
-const char* ANSWERS_FILE_NAME = "haversine_answers.f64";
+const char* DATA_FILE_NAME_BASE = "haversine_data";
+const char* DATA_FILE_NAME_EXT = ".json";
 
-const u64 NUM_PAIRS = 100000;
+const char* ANSWERS_FILE_NAME_BASE = "haversine_answers";
+const char* ANSWERS_FILE_NAME_EXT = ".f64";
+
+const u64 NUM_PAIRS = 1000000;
 const unsigned CLUSTER_COUNT = 32;
 
 double wrapToRange(double value, double min, double max)
@@ -119,16 +122,16 @@ f64 ComputeMeanDistance(const std::vector<HaversinePair>& pairs)
 
 void WritePairs(const std::vector<HaversinePair>& pairs)
 {
-	std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
-
+	const std::string data_file_name = DATA_FILE_NAME_BASE + std::to_string(NUM_PAIRS) + DATA_FILE_NAME_EXT;
 	FILE* file;
-	errno_t err = fopen_s(&file, DATA_FILE_NAME, "wb");
+	errno_t err = fopen_s(&file, data_file_name.c_str(), "wb");
 	if (err || (!file)) {
 		return;
 	}
 
+	const std::string answers_file_name = ANSWERS_FILE_NAME_BASE + std::to_string(NUM_PAIRS) + ANSWERS_FILE_NAME_EXT;
 	FILE* fileAnswers;
-	errno_t errAnswers = fopen_s(&fileAnswers, ANSWERS_FILE_NAME, "wb");
+	errno_t errAnswers = fopen_s(&fileAnswers, answers_file_name.c_str(), "wb");
 	if (errAnswers || (!fileAnswers)) {
 		return;
 	}
@@ -155,9 +158,6 @@ void WritePairs(const std::vector<HaversinePair>& pairs)
 
 	fclose(file);
 	fclose(fileAnswers);
-
-	std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-	std::cout << "elapsed time data file generation: = " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "[ms]" << std::endl;
 }
 
 bool ValidateResult(const size_t pairCount, const f64 computedMean, const char* answersFile)
@@ -188,35 +188,75 @@ bool ValidateResult(const size_t pairCount, const f64 computedMean, const char* 
 	return true;
 }
 
-const bool generateData = true;
+void PrintCpuTime(const char* label, const u64 totalTime, const u64 startTime, const u64 endTime)
+{
+	const u64 elapsedTime = endTime - startTime;
+	const f64 percentage = static_cast<f64>(elapsedTime * 100) / static_cast<f64>(totalTime);
+	fprintf(stdout, "%s: %llu (%.2f%%)\n", label,  elapsedTime, percentage);
+}
+
+const bool generateData = false;
 const bool parseData = true;
-const bool computeMeanHaversine = true;
 
 int main()
 {
+	const u64 cpuStart = ReadCPUTimer();
+	u64 cpuAfterWrite = cpuStart;
+
+	u64 cpuReadStart = cpuStart;
+	u64 cpuReadEnd = cpuStart;
+
+	u64 cpuParseStart = cpuStart;
+	u64 cpuParseEnd = cpuStart;
+
+	u64 cpuComputeStart = cpuStart;
+	u64 cpuComputeEnd = cpuStart;
+
+	u64 cpuValidateStart = cpuStart;
+	u64 cpuValidateEnd = cpuStart;
+
 	if (generateData) {
 		const std::vector<HaversinePair> pairs = CreatePairs(true);
 		WritePairs(pairs);
+		cpuAfterWrite = ReadCPUTimer();
 	}
 
-	if (parseData) {
-		std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
-
-		JsonParser parser;
-		const std::vector<HaversinePair> parsedPairs = parser.Parse(DATA_FILE_NAME);
-
-		std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-		std::cout << "elapsed time json parsing: = " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "[ms]" << std::endl;
-
-		if (computeMeanHaversine) {
-			std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-
-			const f64 haversineMean = ComputeMeanDistance(parsedPairs);
-			const bool valid = ValidateResult(parsedPairs.size(), haversineMean, ANSWERS_FILE_NAME);
-
-			std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
-			std::cout << "Elapsed time computing haversine: = " << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count() << "[ms]" << std::endl;
-		}
+	if (!parseData) {
+		return 0;
 	}
+
+	cpuReadStart = ReadCPUTimer();
+	const std::string data_file_name = DATA_FILE_NAME_BASE + std::string("1000000") + DATA_FILE_NAME_EXT;
+	JsonParser parser;
+	parser.Read(data_file_name);
+	cpuReadEnd = ReadCPUTimer();
+
+	cpuParseStart = cpuReadEnd;
+	const std::vector<HaversinePair> parsedPairs = parser.Parse();
+	cpuParseEnd = ReadCPUTimer();
+
+	cpuComputeStart = ReadCPUTimer();
+	const f64 haversineMean = ComputeMeanDistance(parsedPairs);
+	cpuComputeEnd = ReadCPUTimer();
+
+	cpuValidateStart = ReadCPUTimer();
+	const bool valid = ValidateResult(parsedPairs.size(), haversineMean, ANSWERS_FILE_NAME_BASE);
+	cpuValidateEnd = ReadCPUTimer();
+
+	fprintf(stdout, "Pair count: %llu\n", parsedPairs.size());
+	fprintf(stdout, "Haversine mean: %.16f\n", haversineMean);
+
+	const u64 cpuEnd = ReadCPUTimer();
+	const u64 cpuFreq = GetEstimatedCPUFrequency();
+
+	const u64 totalCpuElapsed = cpuEnd - cpuStart;
+	const f64 totalCpuTime = static_cast<f64>(totalCpuElapsed) * 1000 / static_cast<f64>(cpuFreq);
+
+	fprintf(stdout, "Total time: %.4fms (CPU freq %llu)\n", totalCpuTime, cpuFreq);
+	PrintCpuTime("Read", totalCpuElapsed, cpuReadStart, cpuReadEnd);
+	PrintCpuTime("Parse", totalCpuElapsed, cpuParseStart, cpuParseEnd);
+	PrintCpuTime("Compute", totalCpuElapsed, cpuComputeStart, cpuComputeEnd);
+	PrintCpuTime("Validate", totalCpuElapsed, cpuValidateStart, cpuValidateEnd);
+
 }
 

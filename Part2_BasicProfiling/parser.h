@@ -67,7 +67,8 @@ struct JsonValue
 class JsonParser
 {
 	public:
-		std::vector<HaversinePair> Parse(const std::string fileName);
+		void Read(const std::string fileName);
+		std::vector<HaversinePair> Parse();
 
 	private:
 		std::unique_ptr<JsonValue> CreateTree();

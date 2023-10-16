@@ -135,23 +135,30 @@ f64 ToFloat(const char* str) {
     return result * sign;
 }
 
-std::vector<HaversinePair> JsonParser::Parse(const std::string fileName)
+void JsonParser::Read(const std::string fileName)
 {
 	std::ifstream file(fileName);
 	if (!file.is_open()) {
-		return std::vector<HaversinePair>();
+		return;
 	}
 
 	const uintmax_t size = std::filesystem::file_size(fileName);
 	buffer.resize(size);
 	file.read(buffer.data(), size);
 	file.close();
+}
 
-	std::unique_ptr<JsonValue> root = CreateTree();
+std::vector<HaversinePair> JsonParser::Parse()
+{
+	if (buffer.empty()) {
+		return std::vector<HaversinePair>();
+	}
 
 	const size_t maxPairCount = buffer.size() / (24 * 4);
 	std::vector<HaversinePair> pairs;
 	pairs.reserve(maxPairCount);
+
+	std::unique_ptr<JsonValue> root = CreateTree();
 	ParsePairs(pairs, root);
 
 	DestroyTree(root);
