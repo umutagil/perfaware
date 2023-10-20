@@ -272,6 +272,8 @@ std::unique_ptr<JsonValue> JsonParser::CreateTree()
 
 std::unique_ptr<JsonValue> JsonParser::GetJsonValue(const Token& token)
 {
+	PROFILE_BLOCK_FUNCTION;
+
 	switch (token.type) {
 		case TokenType::BooleanTrue:
 		case TokenType::BooleanFalse:

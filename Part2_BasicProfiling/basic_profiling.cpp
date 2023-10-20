@@ -162,7 +162,7 @@ void WritePairs(const std::vector<HaversinePair>& pairs)
 	fclose(fileAnswers);
 }
 
-bool ValidateResult(const size_t pairCount, const f64 computedMean, const char* answersFile)
+bool ValidateResult(const size_t pairCount, const f64 computedMean, const std::string& answersFile)
 {
 	PROFILE_BLOCK(__func__);
 
@@ -215,13 +215,15 @@ int main()
 		return 0;
 	}
 
-	const std::string data_file_name = DATA_FILE_NAME_BASE + std::string("1000000") + DATA_FILE_NAME_EXT;
+	const std::string dataFileName = DATA_FILE_NAME_BASE + std::to_string(NUM_PAIRS) + DATA_FILE_NAME_EXT;
 	JsonParser parser;
-	parser.Read(data_file_name);
+	parser.Read(dataFileName);
 
 	const std::vector<HaversinePair> parsedPairs = parser.Parse();
 	const f64 haversineMean = ComputeMeanDistance(parsedPairs);
-	const bool valid = ValidateResult(parsedPairs.size(), haversineMean, ANSWERS_FILE_NAME_BASE);
+
+	const std::string answersFileName = ANSWERS_FILE_NAME_BASE + std::to_string(NUM_PAIRS) + ANSWERS_FILE_NAME_EXT;
+	const bool valid = ValidateResult(parsedPairs.size(), haversineMean, answersFileName);
 
 	fprintf(stdout, "Pair count: %llu\n", parsedPairs.size());
 	fprintf(stdout, "Haversine mean: %.16f\n", haversineMean);

@@ -19,9 +19,10 @@ class Profiler;
 struct ProfilerBlockInfo
 {
 	const char* name;
-	u64 elapsedTime;
-	u64 elapsedTimeChildren;
-	u64 hitCount;
+	u64 elapsedTime = 0;
+	u64 elapsedTimeChildren = 0;
+	u64 elapsedTimeRoot = 0;
+	u64 hitCount = 0;
 };
 
 template <const char* N, const unsigned ID>
@@ -32,34 +33,40 @@ public:
 	ProfileBlock(const char* blockName)
 		: blockName(blockName)
 		, beginCpuTime(ReadCPUTimer())
+		, parentBlockIndex(Profiler::parentBlockIndex)
+		, elapsedTimeAtRoot(Profiler::blocks[blockIndex].elapsedTimeRoot)
 	{
 		if (blockIndex == 0) {
 			blockIndex = Profiler::GetNewIndex();
 		}
 
-		parentBlockIndex = Profiler::parentBlockIndex;
 		Profiler::parentBlockIndex = blockIndex;
 	}
 
 	~ProfileBlock()
 	{
-		Profiler::AddBlock(blockName, ReadCPUTimer() - beginCpuTime, blockIndex, parentBlockIndex);
+		const u64 elapsedTime = ReadCPUTimer() - beginCpuTime;
+		ProfilerBlockInfo& block(Profiler::blocks[blockIndex]);
+		++block.hitCount;
+		block.name = blockName;
+		block.elapsedTime += elapsedTime;
+		block.elapsedTimeRoot = elapsedTimeAtRoot + elapsedTime;
+
+		Profiler::blocks[parentBlockIndex].elapsedTimeChildren += elapsedTime;
 		Profiler::parentBlockIndex = parentBlockIndex;
 	}
 
 private:
 	const char* blockName;
 	u64 beginCpuTime;
+	u64 elapsedTimeAtRoot;
 
+	u32 parentBlockIndex;
 	static u32 blockIndex;
-	static u32 parentBlockIndex;
 };
 
 template <const char* N, const unsigned ID>
 u32 ProfileBlock<N, ID>::blockIndex = 0;
-
-template <const char* N, const unsigned ID>
-u32 ProfileBlock<N, ID>::parentBlockIndex = 0;
 
 
 class Profiler
@@ -71,14 +78,10 @@ public:
 	static void Begin();
 	static void End();
 
-	static void AddBlock(const char* name, const u64 elapsedTime, const size_t idx, const size_t parentIdx);
 	static void PrintBlocks();
 
 private:
 	static u32 GetNewIndex();
-
-public:
-	static u32 parentBlockIndex;
 
 private:
 	static ProfilerBlockInfo blocks[4096];
@@ -86,4 +89,5 @@ private:
 	static u64 endCpuTime;
 
 	static u32 indexCounter;
+	static u32 parentBlockIndex;
 };
