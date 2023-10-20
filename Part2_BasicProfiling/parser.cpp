@@ -4,6 +4,7 @@
 #include <filesystem>
 
 #include "parser.h"
+#include "profiler.h"
 
 JsonValue JsonValue::nullValue = {};
 
@@ -137,6 +138,8 @@ f64 ToFloat(const char* str) {
 
 void JsonParser::Read(const std::string fileName)
 {
+	PROFILE_BLOCK_FUNCTION;
+
 	std::ifstream file(fileName);
 	if (!file.is_open()) {
 		return;
@@ -150,6 +153,8 @@ void JsonParser::Read(const std::string fileName)
 
 std::vector<HaversinePair> JsonParser::Parse()
 {
+	PROFILE_BLOCK_FUNCTION;
+
 	if (buffer.empty()) {
 		return std::vector<HaversinePair>();
 	}
@@ -159,8 +164,8 @@ std::vector<HaversinePair> JsonParser::Parse()
 	pairs.reserve(maxPairCount);
 
 	std::unique_ptr<JsonValue> root = CreateTree();
-	ParsePairs(pairs, root);
 
+	ParsePairs(pairs, root);
 	DestroyTree(root);
 
 	return pairs;

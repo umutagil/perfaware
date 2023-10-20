@@ -11,20 +11,20 @@
 
 #include "haversine_formula.h"
 #include "parser.h"
-#include "platform_metrics.h"
+#include "profiler.h"
 
 std::random_device randomDevice;
 std::mt19937_64 generator(randomDevice());
 std::uniform_real_distribution<f64> distGlobalX(-180.0, 180.0);
 std::uniform_real_distribution<f64> distGlobalY(-90.0, 90.0);
 
-const char* DATA_FILE_NAME_BASE = "haversine_data";
+const char* DATA_FILE_NAME_BASE = "data/haversine_data";
 const char* DATA_FILE_NAME_EXT = ".json";
 
-const char* ANSWERS_FILE_NAME_BASE = "haversine_answers";
+const char* ANSWERS_FILE_NAME_BASE = "data/haversine_answers";
 const char* ANSWERS_FILE_NAME_EXT = ".f64";
 
-const u64 NUM_PAIRS = 1000000;
+const unsigned NUM_PAIRS = 1000000;
 const unsigned CLUSTER_COUNT = 32;
 
 double wrapToRange(double value, double min, double max)
@@ -79,7 +79,7 @@ std::vector<HaversinePair> CreatePairsCluster()
 
 	for (size_t i = 0; i < CLUSTER_COUNT; ++i) {
 		if (i == CLUSTER_COUNT - 1) {
-			clusterPopulation = NUM_PAIRS - pairs.size();
+			clusterPopulation = NUM_PAIRS - static_cast<unsigned>(pairs.size());
 		}
 
 		const Point center = GetGlobalRandomPoint();
@@ -111,6 +111,8 @@ std::vector<HaversinePair> CreatePairs(const bool isCluster)
 
 f64 ComputeMeanDistance(const std::vector<HaversinePair>& pairs)
 {
+	PROFILE_BLOCK(__func__);
+
 	const f64 coef = 1.0 / static_cast<f64>(pairs.size());
 	f64 mean = 0;
 	for (const HaversinePair& pair : pairs) {
@@ -162,6 +164,8 @@ void WritePairs(const std::vector<HaversinePair>& pairs)
 
 bool ValidateResult(const size_t pairCount, const f64 computedMean, const char* answersFile)
 {
+	PROFILE_BLOCK(__func__);
+
 	std::ifstream file(answersFile, std::ios::binary);
 	if (!file.is_open()) {
 		return false;
@@ -188,9 +192,9 @@ bool ValidateResult(const size_t pairCount, const f64 computedMean, const char* 
 	return true;
 }
 
-void PrintCpuTime(const char* label, const u64 totalTime, const u64 startTime, const u64 endTime)
+void PrintCpuTime(const char* label, const u64 totalTime, const u64 startTime, const u64 endCpuTime)
 {
-	const u64 elapsedTime = endTime - startTime;
+	const u64 elapsedTime = endCpuTime - startTime;
 	const f64 percentage = static_cast<f64>(elapsedTime * 100) / static_cast<f64>(totalTime);
 	fprintf(stdout, "%s: %llu (%.2f%%)\n", label,  elapsedTime, percentage);
 }
@@ -200,63 +204,30 @@ const bool parseData = true;
 
 int main()
 {
-	const u64 cpuStart = ReadCPUTimer();
-	u64 cpuAfterWrite = cpuStart;
-
-	u64 cpuReadStart = cpuStart;
-	u64 cpuReadEnd = cpuStart;
-
-	u64 cpuParseStart = cpuStart;
-	u64 cpuParseEnd = cpuStart;
-
-	u64 cpuComputeStart = cpuStart;
-	u64 cpuComputeEnd = cpuStart;
-
-	u64 cpuValidateStart = cpuStart;
-	u64 cpuValidateEnd = cpuStart;
+	Profiler::Begin();
 
 	if (generateData) {
 		const std::vector<HaversinePair> pairs = CreatePairs(true);
 		WritePairs(pairs);
-		cpuAfterWrite = ReadCPUTimer();
 	}
 
 	if (!parseData) {
 		return 0;
 	}
 
-	cpuReadStart = ReadCPUTimer();
 	const std::string data_file_name = DATA_FILE_NAME_BASE + std::string("1000000") + DATA_FILE_NAME_EXT;
 	JsonParser parser;
 	parser.Read(data_file_name);
-	cpuReadEnd = ReadCPUTimer();
 
-	cpuParseStart = cpuReadEnd;
 	const std::vector<HaversinePair> parsedPairs = parser.Parse();
-	cpuParseEnd = ReadCPUTimer();
-
-	cpuComputeStart = ReadCPUTimer();
 	const f64 haversineMean = ComputeMeanDistance(parsedPairs);
-	cpuComputeEnd = ReadCPUTimer();
-
-	cpuValidateStart = ReadCPUTimer();
 	const bool valid = ValidateResult(parsedPairs.size(), haversineMean, ANSWERS_FILE_NAME_BASE);
-	cpuValidateEnd = ReadCPUTimer();
 
 	fprintf(stdout, "Pair count: %llu\n", parsedPairs.size());
 	fprintf(stdout, "Haversine mean: %.16f\n", haversineMean);
+	fprintf(stdout, "\n");
 
-	const u64 cpuEnd = ReadCPUTimer();
-	const u64 cpuFreq = GetEstimatedCPUFrequency();
-
-	const u64 totalCpuElapsed = cpuEnd - cpuStart;
-	const f64 totalCpuTime = static_cast<f64>(totalCpuElapsed) * 1000 / static_cast<f64>(cpuFreq);
-
-	fprintf(stdout, "Total time: %.4fms (CPU freq %llu)\n", totalCpuTime, cpuFreq);
-	PrintCpuTime("Read", totalCpuElapsed, cpuReadStart, cpuReadEnd);
-	PrintCpuTime("Parse", totalCpuElapsed, cpuParseStart, cpuParseEnd);
-	PrintCpuTime("Compute", totalCpuElapsed, cpuComputeStart, cpuComputeEnd);
-	PrintCpuTime("Validate", totalCpuElapsed, cpuValidateStart, cpuValidateEnd);
-
+	Profiler::End();
+	Profiler::PrintBlocks();
 }
 
