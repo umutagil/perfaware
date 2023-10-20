@@ -281,7 +281,24 @@ std::unique_ptr<JsonValue> JsonParser::GetJsonValue(const Token& token)
 		case TokenType::Number:
 		case TokenType::String:
 			return std::make_unique<JsonValue>(std::string_view(&buffer[token.startIdx], (token.endIdx - token.startIdx)));
+		case TokenType::OpenCurlyBrace:
+		case TokenType::OpenSquareBracket:
+			return GetJsonList(token);
 
+		default: {
+			const size_t count = (token.endIdx + 1) - token.startIdx;
+			const std::string errorString(&buffer[token.startIdx], count);
+			std::cout << "Erronous JSON at: " << errorString << std::endl;
+			break;
+		}
+	}
+
+	return std::unique_ptr<JsonValue>();
+}
+
+std::unique_ptr<JsonValue> JsonParser::GetJsonList(const Token& token)
+{
+	switch (token.type) {
 		case TokenType::OpenCurlyBrace: {
 			auto res = std::make_unique<JsonValue>();
 			std::unique_ptr<JsonValue>* lastPtr = &res->firstSubValue;
@@ -339,12 +356,6 @@ std::unique_ptr<JsonValue> JsonParser::GetJsonValue(const Token& token)
 			}
 
 			std::cout << "Erronous EOF for JSON " << std::endl;
-			break;
-		}
-		default: {
-			const size_t count = (token.endIdx + 1) - token.startIdx;
-			const std::string errorString(&buffer[token.startIdx], count);
-			std::cout << "Erronous JSON at: " << errorString << std::endl;
 			break;
 		}
 	}

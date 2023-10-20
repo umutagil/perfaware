@@ -77,6 +77,7 @@ class JsonParser
 		void ParsePairs(std::vector<HaversinePair>& pairsOut, const std::unique_ptr<JsonValue>& root);
 
 		std::unique_ptr<JsonValue> GetJsonValue(const Token& token);
+		std::unique_ptr<JsonValue> GetJsonList(const Token& token);
 
 		Token GetNextToken() const;
 
