@@ -25,13 +25,12 @@ u32 Profiler::GetNewIndex()
 
 void PrintBlockInfo(const ProfilerBlockInfo& info, const u64 totalCpuElapsed)
 {
-	const u64 elapsedTimeNoChild = info.elapsedTime - info.elapsedTimeChildren;
-	const f64 percentage = 100.0 * static_cast<f64>(elapsedTimeNoChild) / static_cast<f64>(totalCpuElapsed);
-	printf("  %s[%llu]: %llu (%.2f%%", info.name, info.hitCount, elapsedTimeNoChild, percentage);
+	const f64 percentageExclusive = 100.0 * static_cast<f64>(info.elapsedTimeExclusive) / static_cast<f64>(totalCpuElapsed);
+	printf("  %s[%llu]: %llu (%.2f%%", info.name, info.hitCount, info.elapsedTimeExclusive, percentageExclusive);
 
-	if (info.elapsedTimeRoot != elapsedTimeNoChild) {
-		const f64 percentageRoot = 100.0 * static_cast<f64>(info.elapsedTimeRoot) / static_cast<f64>(totalCpuElapsed);
-		printf(", %.2f%% w/children", percentageRoot);
+	if (info.elapsedTimeInclusive != info.elapsedTimeExclusive) {
+		const f64 percentageInclusive = 100.0 * static_cast<f64>(info.elapsedTimeInclusive) / static_cast<f64>(totalCpuElapsed);
+		printf(", %.2f%% w/children", percentageInclusive);
 	}
 
 	printf(")\n");

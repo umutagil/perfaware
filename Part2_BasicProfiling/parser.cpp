@@ -298,6 +298,8 @@ std::unique_ptr<JsonValue> JsonParser::GetJsonValue(const Token& token)
 
 std::unique_ptr<JsonValue> JsonParser::GetJsonList(const Token& token)
 {
+	PROFILE_BLOCK_FUNCTION;
+
 	switch (token.type) {
 		case TokenType::OpenCurlyBrace: {
 			auto res = std::make_unique<JsonValue>();

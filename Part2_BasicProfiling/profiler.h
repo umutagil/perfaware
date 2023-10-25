@@ -74,9 +74,8 @@ class Profiler;
 struct ProfilerBlockInfo
 {
 	const char* name;
-	u64 elapsedTime = 0;
-	u64 elapsedTimeChildren = 0;
-	u64 elapsedTimeRoot = 0;
+	u64 elapsedTimeExclusive = 0;
+	u64 elapsedTimeInclusive = 0;
 	u64 hitCount = 0;
 };
 
@@ -89,7 +88,7 @@ public:
 		: blockName(blockName)
 		, beginCpuTime(ReadCPUTimer())
 		, parentBlockIndex(Profiler::parentBlockIndex)
-		, elapsedTimeAtRoot(Profiler::blocks[blockIndex].elapsedTimeRoot)
+		, elapsedTimeInclusive(Profiler::blocks[blockIndex].elapsedTimeInclusive)
 	{
 		if (blockIndex == 0) {
 			blockIndex = Profiler::GetNewIndex();
@@ -104,17 +103,17 @@ public:
 		ProfilerBlockInfo& block(Profiler::blocks[blockIndex]);
 		++block.hitCount;
 		block.name = blockName;
-		block.elapsedTime += elapsedTime;
-		block.elapsedTimeRoot = elapsedTimeAtRoot + elapsedTime;
+		block.elapsedTimeExclusive += elapsedTime;
+		block.elapsedTimeInclusive = elapsedTimeInclusive + elapsedTime;
 
-		Profiler::blocks[parentBlockIndex].elapsedTimeChildren += elapsedTime;
+		Profiler::blocks[parentBlockIndex].elapsedTimeExclusive -= elapsedTime;
 		Profiler::parentBlockIndex = parentBlockIndex;
 	}
 
 private:
 	const char* blockName;
 	u64 beginCpuTime;
-	u64 elapsedTimeAtRoot;
+	u64 elapsedTimeInclusive;
 
 	u32 parentBlockIndex;
 	static u32 blockIndex;
