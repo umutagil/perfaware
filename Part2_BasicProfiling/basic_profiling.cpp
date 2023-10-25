@@ -182,8 +182,7 @@ bool ValidateResult(const size_t pairCount, const f64 computedMean, const std::s
 	file.read(buffer, size);
 	file.close();
 
-	//const f64* answersArray = reinterpret_cast<f64*>(buffer);
-	const f64* answersArray = (f64*)(buffer);
+	const f64* answersArray = reinterpret_cast<f64*>(buffer);
 	const f64 refMean = answersArray[pairCount];
 
 	fprintf(stdout, "Reference mean: %.16f\n", refMean);

@@ -17,12 +17,14 @@
 
 struct SubStr
 {
-	size_t startIdx;
-	size_t length;
-
-	constexpr SubStr(const size_t start, const size_t len) : startIdx{ start }, length{ len }
+	constexpr SubStr(const size_t start, const size_t len)
+		: startIdx{ start }
+		, length{ len }
 	{
 	}
+
+	size_t startIdx;
+	size_t length;
 };
 
 constexpr SubStr LastSubstring(const char* str, const char delimeter = '\\')
@@ -42,7 +44,8 @@ constexpr SubStr LastSubstring(const char* str, const char delimeter = '\\')
 
 struct SubStringInfo
 {
-	constexpr SubStringInfo(std::source_location const& loc) : substring{ LastSubstring(loc.file_name()) }
+	constexpr SubStringInfo(std::source_location const& loc)
+		: substring{ LastSubstring(loc.file_name()) }
 	{
 	}
 
@@ -52,7 +55,9 @@ struct SubStringInfo
 template<SubStringInfo S>
 struct SourceLocationInfo
 {
-	constexpr SourceLocationInfo(std::source_location const& loc) : fileNameArray{}, lineNum{ loc.line() }
+	constexpr SourceLocationInfo(std::source_location const& loc)
+		: fileNameArray{}
+		, lineNum{ loc.line() }
 	{
 		const char* fileName = loc.file_name();
 		const char* start = fileName + S.substring.startIdx;
