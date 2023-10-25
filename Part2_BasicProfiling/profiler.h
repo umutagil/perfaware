@@ -1,18 +1,68 @@
 #pragma once
 
 #include <source_location>
+#include <assert.h>
+#include <array>
 
 #include "basedef.h"
 #include "platform_metrics.h"
 
-#define GET_LINE_NUM std::source_location::current().line()
+
+#define GET_LOCATION std::source_location::current()
 
 #define NAME_CONCAT(A, B) A##B
-#define FILE_NAME_LITERAL(name, index) static const char NAME_CONCAT(name, index)[] = __FILE__;
-#define CREATE_BLOCK(blockName, varNamePostfix) FILE_NAME_LITERAL(file, varNamePostfix)\
-							ProfileBlock<NAME_CONCAT(file, varNamePostfix), GET_LINE_NUM> NAME_CONCAT(block, varNamePostfix)(blockName);
+#define CREATE_BLOCK(blockName, varNamePostfix) const auto NAME_CONCAT(block, varNamePostfix) = GetProfileBlock<GET_LOCATION, GET_LOCATION>(blockName);
 #define PROFILE_BLOCK(name) CREATE_BLOCK(name, __COUNTER__)
 #define PROFILE_BLOCK_FUNCTION PROFILE_BLOCK(__func__)
+
+struct SubStr
+{
+	size_t startIdx;
+	size_t length;
+
+	constexpr SubStr(const size_t start, const size_t len) : startIdx{ start }, length{ len }
+	{
+	}
+};
+
+constexpr SubStr LastSubstring(const char* str, const char delimeter = '\\')
+{
+	size_t startIdx = 0;
+	size_t len = 0;
+	for (size_t i = 0; str[i] != '\0'; ++i, ++len) {
+		if (str[i] == delimeter) {
+			len = 0;
+			startIdx = i;
+		}
+	}
+
+	assert(len > 0);
+	return SubStr{startIdx, len - 1};
+}
+
+struct SubStringInfo
+{
+	constexpr SubStringInfo(std::source_location const& loc) : substring{ LastSubstring(loc.file_name()) }
+	{
+	}
+
+	SubStr substring;
+};
+
+template<SubStringInfo S>
+struct SourceLocationInfo
+{
+	constexpr SourceLocationInfo(std::source_location const& loc) : fileNameArray{}, lineNum{ loc.line() }
+	{
+		const char* fileName = loc.file_name();
+		const char* start = fileName + S.substring.startIdx;
+		const char* end = start + S.substring.length;
+		std::copy(start, end, fileNameArray.begin());
+	}
+
+	std::array<char, S.substring.length> fileNameArray;
+	unsigned lineNum;
+};
 
 class Profiler;
 
@@ -25,7 +75,7 @@ struct ProfilerBlockInfo
 	u64 hitCount = 0;
 };
 
-template <const char* N, const unsigned ID>
+template <SourceLocationInfo S>
 class ProfileBlock
 {
 public:
@@ -65,13 +115,13 @@ private:
 	static u32 blockIndex;
 };
 
-template <const char* N, const unsigned ID>
-u32 ProfileBlock<N, ID>::blockIndex = 0;
+template <SourceLocationInfo S>
+u32 ProfileBlock<S>::blockIndex = 0;
 
 
 class Profiler
 {
-	template <const char* N, const unsigned ID>
+	template <SourceLocationInfo S>
 	friend class ProfileBlock;
 
 public:
@@ -91,3 +141,10 @@ private:
 	static u32 indexCounter;
 	static u32 parentBlockIndex;
 };
+
+
+template<SubStringInfo S, SourceLocationInfo<S> A>
+constexpr auto GetProfileBlock(const char* blockName)
+{
+	return ProfileBlock<A>(blockName);
+}
