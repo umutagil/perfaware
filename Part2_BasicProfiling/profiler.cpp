@@ -2,22 +2,7 @@
 
 #include <stdio.h>
 
-u64 Profiler::beginCpuTime;
-u64 Profiler::endCpuTime;
-u32 Profiler::indexCounter;
-u32 Profiler::parentBlockIndex;
-ProfilerBlockInfo Profiler::blocks[4096];
-
-void Profiler::Begin()
-{
-	beginCpuTime = ReadCPUTimer();
-}
-
-void Profiler::End()
-{
-	endCpuTime = ReadCPUTimer();
-}
-
+#if PROFILER
 u32 Profiler::GetNewIndex()
 {
 	return ++indexCounter;
@@ -36,6 +21,26 @@ void PrintBlockInfo(const ProfilerBlockInfo& info, const u64 totalCpuElapsed)
 	printf(")\n");
 }
 
+#else
+#define PrintBlockInfo(...)
+#endif
+
+u64 Profiler::beginCpuTime;
+u64 Profiler::endCpuTime;
+u32 Profiler::indexCounter;
+u32 Profiler::parentBlockIndex;
+ProfilerBlockInfo Profiler::blocks[4096];
+
+void Profiler::Begin()
+{
+	beginCpuTime = ReadCPUTimer();
+}
+
+void Profiler::End()
+{
+	endCpuTime = ReadCPUTimer();
+}
+
 void Profiler::PrintBlocks()
 {
 	if (endCpuTime == 0) {
@@ -51,5 +56,3 @@ void Profiler::PrintBlocks()
 		PrintBlockInfo(blocks[i], totalCpuElapsed);
 	}
 }
-
-

@@ -166,13 +166,19 @@ std::vector<HaversinePair> JsonParser::Parse()
 	std::unique_ptr<JsonValue> root = CreateTree();
 
 	ParsePairs(pairs, root);
-	DestroyTree(root);
+
+	{
+		PROFILE_BLOCK("Destroy Tree");
+		DestroyTree(root);
+	}
 
 	return pairs;
 }
 
 void JsonParser::ParsePairs(std::vector<HaversinePair>& pairsOut, const std::unique_ptr<JsonValue>& root)
 {
+	PROFILE_BLOCK_FUNCTION;
+
 	const JsonValue& pairs = root->FindByLabel("pairs");
 	if (pairs.label == "Null") {
 		return;
@@ -266,14 +272,13 @@ Token JsonParser::GetNextToken() const
 
 std::unique_ptr<JsonValue> JsonParser::CreateTree()
 {
+	PROFILE_BLOCK_FUNCTION;
 	Token token = GetNextToken();
 	return GetJsonValue(token);
 }
 
 std::unique_ptr<JsonValue> JsonParser::GetJsonValue(const Token& token)
 {
-	PROFILE_BLOCK_FUNCTION;
-
 	switch (token.type) {
 		case TokenType::BooleanTrue:
 		case TokenType::BooleanFalse:
@@ -298,8 +303,6 @@ std::unique_ptr<JsonValue> JsonParser::GetJsonValue(const Token& token)
 
 std::unique_ptr<JsonValue> JsonParser::GetJsonList(const Token& token)
 {
-	PROFILE_BLOCK_FUNCTION;
-
 	switch (token.type) {
 		case TokenType::OpenCurlyBrace: {
 			auto res = std::make_unique<JsonValue>();

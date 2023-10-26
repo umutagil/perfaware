@@ -34,3 +34,5 @@ struct HaversinePair
 	{
 	}
 };
+
+#define PROFILER 1

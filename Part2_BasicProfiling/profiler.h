@@ -7,6 +7,13 @@
 #include "basedef.h"
 #include "platform_metrics.h"
 
+#define PROFILER 1
+
+#ifndef PROFILER
+#define PROFILER 0
+#endif // !PROFILER
+
+#if PROFILER
 
 #define GET_LOCATION std::source_location::current()
 
@@ -129,6 +136,21 @@ private:
 template <SourceLocationInfo S>
 u32 ProfileBlock<S>::blockIndex = 0;
 
+template<SubStringInfo S, SourceLocationInfo<S> A>
+constexpr auto GetProfileBlock(const char* blockName)
+{
+	return ProfileBlock<A>(blockName);
+}
+
+#else
+#define PROFILE_BLOCK(...)
+#define PROFILE_BLOCK_FUNCTION PROFILE_BLOCK(...)
+
+struct SourceLocationInfo{};
+struct ProfilerBlockInfo{};
+
+#endif
+
 
 class Profiler
 {
@@ -152,10 +174,3 @@ private:
 	static u32 indexCounter;
 	static u32 parentBlockIndex;
 };
-
-
-template<SubStringInfo S, SourceLocationInfo<S> A>
-constexpr auto GetProfileBlock(const char* blockName)
-{
-	return ProfileBlock<A>(blockName);
-}
