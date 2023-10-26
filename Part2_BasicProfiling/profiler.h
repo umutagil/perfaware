@@ -69,6 +69,14 @@ struct SourceLocationInfo
 	unsigned lineNum;
 };
 
+struct Runner
+{
+	Runner(auto&& callable)
+	{
+		callable();
+	}
+};
+
 class Profiler;
 
 struct ProfilerBlockInfo
@@ -79,20 +87,21 @@ struct ProfilerBlockInfo
 	u64 hitCount = 0;
 };
 
+// NOTE(Umut): Block name can be even retrieved as template parameter.
 template <SourceLocationInfo S>
 class ProfileBlock
 {
 public:
 
 	ProfileBlock(const char* blockName)
-		: blockName(blockName)
-		, beginCpuTime(ReadCPUTimer())
+		: beginCpuTime(ReadCPUTimer())
 		, parentBlockIndex(Profiler::parentBlockIndex)
 		, elapsedTimeInclusive(Profiler::blocks[blockIndex].elapsedTimeInclusive)
 	{
-		if (blockIndex == 0) {
+		static const Runner initialTask{ [&blockName]() {
 			blockIndex = Profiler::GetNewIndex();
-		}
+			Profiler::blocks[blockIndex].name = blockName;
+		}};
 
 		Profiler::parentBlockIndex = blockIndex;
 	}
@@ -102,7 +111,6 @@ public:
 		const u64 elapsedTime = ReadCPUTimer() - beginCpuTime;
 		ProfilerBlockInfo& block(Profiler::blocks[blockIndex]);
 		++block.hitCount;
-		block.name = blockName;
 		block.elapsedTimeExclusive += elapsedTime;
 		block.elapsedTimeInclusive = elapsedTimeInclusive + elapsedTime;
 
@@ -111,7 +119,6 @@ public:
 	}
 
 private:
-	const char* blockName;
 	u64 beginCpuTime;
 	u64 elapsedTimeInclusive;
 
