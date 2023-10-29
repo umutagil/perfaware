@@ -35,4 +35,5 @@ struct HaversinePair
 	}
 };
 
-#define PROFILER 1
+#define PROFILER 0
+#define ALTERNATE_TIMER 1

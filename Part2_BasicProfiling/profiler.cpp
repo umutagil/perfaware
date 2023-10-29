@@ -33,12 +33,12 @@ ProfilerBlockInfo Profiler::blocks[4096];
 
 void Profiler::Begin()
 {
-	beginCpuTime = ReadCPUTimer();
+	beginCpuTime = TimerFunc();
 }
 
 void Profiler::End()
 {
-	endCpuTime = ReadCPUTimer();
+	endCpuTime = TimerFunc();
 }
 
 void Profiler::PrintBlocks()
@@ -48,7 +48,7 @@ void Profiler::PrintBlocks()
 	}
 
 	const u64 totalCpuElapsed = endCpuTime - beginCpuTime;
-	const u64 cpuFreq = GetEstimatedCPUFrequency();
+	const u64 cpuFreq = CpuFrequencyFunc();
 	const f64 totalCpuTime = static_cast<f64>(totalCpuElapsed) * 1000 / static_cast<f64>(cpuFreq);
 	printf("Total time: %.4fms (CPU freq %llu)\n", totalCpuTime, cpuFreq);
 

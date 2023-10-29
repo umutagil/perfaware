@@ -23,14 +23,15 @@
 
 #include "basedef.h"
 
-static u64 GetOSTimerFreq(void)
+inline u64 GetOSTimerFreq(void)
 {
 	LARGE_INTEGER Freq;
 	QueryPerformanceFrequency(&Freq);
 	return Freq.QuadPart;
 }
 
-static u64 ReadOSTimer(void)
+
+inline u64 ReadOSTimer(void)
 {
 	LARGE_INTEGER Value;
 	QueryPerformanceCounter(&Value);

@@ -3,11 +3,25 @@
 #include <source_location>
 #include <assert.h>
 #include <array>
+#include <functional>
 
 #include "basedef.h"
 #include "platform_metrics.h"
 
-#define PROFILER 1
+using TimerFunction = std::function<u64()>;
+using CpuFrequencyFunction = std::function<u64()>;
+
+#ifndef ALTERNATE_TIMER
+#define ALTERNATE_TIMER 0
+#endif
+
+#if ALTERNATE_TIMER
+	inline TimerFunction TimerFunc = ReadOSTimer;
+	inline CpuFrequencyFunction CpuFrequencyFunc = GetOSTimerFreq;
+#else
+	inline TimerFunction TimerFunc = ReadCPUTimer;
+	inline CpuFrequencyFunction CpuFrequencyFunc = GetEstimatedCPUFrequency;
+#endif
 
 #ifndef PROFILER
 #define PROFILER 0
@@ -101,7 +115,7 @@ class ProfileBlock
 public:
 
 	ProfileBlock(const char* blockName)
-		: beginCpuTime(ReadCPUTimer())
+		: beginCpuTime(TimerFunc())
 		, parentBlockIndex(Profiler::parentBlockIndex)
 		, elapsedTimeInclusive(Profiler::blocks[blockIndex].elapsedTimeInclusive)
 	{
@@ -115,7 +129,7 @@ public:
 
 	~ProfileBlock()
 	{
-		const u64 elapsedTime = ReadCPUTimer() - beginCpuTime;
+		const u64 elapsedTime = TimerFunc() - beginCpuTime;
 		ProfilerBlockInfo& block(Profiler::blocks[blockIndex]);
 		++block.hitCount;
 		block.elapsedTimeExclusive += elapsedTime;
