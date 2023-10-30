@@ -15,25 +15,5 @@ using b32 = s32;
 using f32 = float;
 using f64 = double;
 
-struct Point
-{
-	f64 x = 0;
-	f64 y = 0;
-};
-
-struct HaversinePair
-{
-	Point p0;
-	Point p1;
-
-	HaversinePair() = default;
-
-	HaversinePair(const f64 x0, const f64 y0, const f64 x1, const f64 y1)
-		: p0{ x0, y0 }
-		, p1{ x1, y1 }
-	{
-	}
-};
-
-#define PROFILER 0
-#define ALTERNATE_TIMER 1
+#define PROFILER 1
+#define ALTERNATE_TIMER 0

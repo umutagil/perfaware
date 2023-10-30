@@ -4,6 +4,7 @@
 #include <filesystem>
 
 #include "parser.h"
+#include "haversine.h"
 #include "profiler.h"
 
 JsonValue JsonValue::nullValue = {};

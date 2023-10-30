@@ -5,7 +5,7 @@
 #include <memory>
 #include <string_view>
 
-#include "basedef.h"
+struct HaversinePair;
 
 enum class TokenType
 {
