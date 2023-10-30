@@ -31,10 +31,11 @@ using CpuFrequencyFunction = std::function<u64()>;
 
 #define GET_LOCATION std::source_location::current()
 
-#define NAME_CONCAT(A, B) A##B
-#define CREATE_BLOCK(blockName, varNamePostfix) const auto NAME_CONCAT(block, varNamePostfix) = GetProfileBlock<GET_LOCATION, GET_LOCATION>(blockName);
-#define PROFILE_BLOCK(name) CREATE_BLOCK(name, __COUNTER__)
-#define PROFILE_BLOCK_FUNCTION PROFILE_BLOCK(__func__)
+#define CONCAT2(A, B) A##B
+#define	NAME_CONCAT(A, B) CONCAT2(A, B)
+
+#define PROFILE_BLOCK(blockName, ...) const auto NAME_CONCAT(block, __COUNTER__) = GetProfileBlock<GET_LOCATION, GET_LOCATION>(blockName, __VA_ARGS__);
+#define PROFILE_BLOCK_FUNCTION(...) PROFILE_BLOCK(__func__, __VA_ARGS__)
 
 struct SubStr
 {
@@ -103,9 +104,10 @@ class Profiler;
 struct ProfilerBlockInfo
 {
 	const char* name;
-	u64 elapsedTimeExclusive = 0;
-	u64 elapsedTimeInclusive = 0;
-	u64 hitCount = 0;
+	u64 elapsedTimeExclusive;
+	u64 elapsedTimeInclusive;
+	u64 hitCount;
+	u64 processedByteCount;
 };
 
 // NOTE(Umut): Block name can be even retrieved as template parameter.
@@ -114,7 +116,7 @@ class ProfileBlock
 {
 public:
 
-	ProfileBlock(const char* blockName)
+	ProfileBlock(const char* blockName, const u64 byteCount = 0)
 		: beginCpuTime(TimerFunc())
 		, parentBlockIndex(Profiler::parentBlockIndex)
 		, elapsedTimeInclusive(Profiler::blocks[blockIndex].elapsedTimeInclusive)
@@ -124,6 +126,7 @@ public:
 			Profiler::blocks[blockIndex].name = blockName;
 		}};
 
+		Profiler::blocks[blockIndex].processedByteCount += byteCount;
 		Profiler::parentBlockIndex = blockIndex;
 	}
 
@@ -150,10 +153,16 @@ private:
 template <SourceLocationInfo S>
 u32 ProfileBlock<S>::blockIndex = 0;
 
+/**
+ * @brief Generate a profile block that profiles CPU and bandwith during its scope.
+ *
+ * @blockName Name of the block.
+ * @byteCount Number of bytes used (to measure bandwith).
+ */
 template<SubStringInfo S, SourceLocationInfo<S> A>
-constexpr auto GetProfileBlock(const char* blockName)
+constexpr auto GetProfileBlock(const char* blockName, const u64 byteCount = 0)
 {
-	return ProfileBlock<A>(blockName);
+	return ProfileBlock<A>(blockName, byteCount);
 }
 
 #else
