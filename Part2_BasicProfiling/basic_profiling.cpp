@@ -111,7 +111,6 @@ std::vector<HaversinePair> CreatePairs(const bool isCluster)
 
 f64 ComputeMeanDistance(const std::vector<HaversinePair>& pairs)
 {
-	PROFILE_BLOCK(__func__);
 
 	const f64 coef = 1.0 / static_cast<f64>(pairs.size());
 	f64 mean = 0;
@@ -164,8 +163,6 @@ void WritePairs(const std::vector<HaversinePair>& pairs)
 
 bool ValidateResult(const size_t pairCount, const f64 computedMean, const std::string& answersFile)
 {
-	PROFILE_BLOCK(__func__);
-
 	std::ifstream file(answersFile, std::ios::binary);
 	if (!file.is_open()) {
 		return false;

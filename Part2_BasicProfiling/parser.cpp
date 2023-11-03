@@ -139,8 +139,6 @@ f64 ToFloat(const char* str) {
 
 void JsonParser::Read(const std::string fileName)
 {
-	PROFILE_BLOCK_FUNCTION;
-
 	std::ifstream file(fileName);
 	if (!file.is_open()) {
 		return;
@@ -154,8 +152,6 @@ void JsonParser::Read(const std::string fileName)
 
 std::vector<HaversinePair> JsonParser::Parse()
 {
-	PROFILE_BLOCK_FUNCTION;
-
 	if (buffer.empty()) {
 		return std::vector<HaversinePair>();
 	}
@@ -167,19 +163,13 @@ std::vector<HaversinePair> JsonParser::Parse()
 	std::unique_ptr<JsonValue> root = CreateTree();
 
 	ParsePairs(pairs, root);
-
-	{
-		PROFILE_BLOCK("Destroy Tree");
-		DestroyTree(root);
-	}
+	DestroyTree(root);
 
 	return pairs;
 }
 
 void JsonParser::ParsePairs(std::vector<HaversinePair>& pairsOut, const std::unique_ptr<JsonValue>& root)
 {
-	PROFILE_BLOCK_FUNCTION;
-
 	const JsonValue& pairs = root->FindByLabel("pairs");
 	if (pairs.label == "Null") {
 		return;
@@ -273,15 +263,12 @@ Token JsonParser::GetNextToken() const
 
 std::unique_ptr<JsonValue> JsonParser::CreateTree()
 {
-	PROFILE_BLOCK_FUNCTION;
 	Token token = GetNextToken();
 	return GetJsonValue(token);
 }
 
 std::unique_ptr<JsonValue> JsonParser::GetJsonValue(const Token& token)
 {
-	PROFILE_BLOCK_FUNCTION;
-
 	switch (token.type) {
 		case TokenType::BooleanTrue:
 		case TokenType::BooleanFalse:
