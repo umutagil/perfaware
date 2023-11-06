@@ -15,5 +15,7 @@ using b32 = s32;
 using f32 = float;
 using f64 = double;
 
+#define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
+
 #define PROFILER 1
 #define ALTERNATE_TIMER 0

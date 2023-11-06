@@ -7,7 +7,21 @@
 
 #include "repetition_tester.h"
 #include "platform_metrics.h"
-#include "read_test.h"
+#include "read_write_tests.h"
+
+
+TestInfo readTests[] = {
+							TestInfo{ "WriteToAllBytes", WriteToAllBytes, nullptr },
+							TestInfo{ "_read", TestReadViaRead, nullptr },
+							TestInfo{ "Readfile", TestReadViaReadFile, nullptr },
+							TestInfo{ "fread", TestReadViaFRead, nullptr }
+						};
+
+TestInfo writeTests[] = {
+							TestInfo{ "WriteToAllBytes", WriteToAllBytes, nullptr },
+							TestInfo{ "WriteToAllBytesBackward", WriteToAllBytesBackward, nullptr }
+						};
+
 
 void RunTests(const bool infinite)
 {
@@ -15,14 +29,12 @@ void RunTests(const bool infinite)
 
 	ReadTestParameters params{ "data/haversine_data10000000.json" };
 	const u64 cpuFreq = GetEstimatedCPUFrequency();
-	const std::array<TestInfo, 4>tests = {
-										   TestInfo{ "WriteToAllBytes", WriteToAllBytes, &params },
-										   TestInfo{ "_read", TestReadViaRead, &params },
-										   TestInfo{ "Readfile", TestReadViaReadFile, &params },
-										   TestInfo{ "fread", TestReadViaFRead, &params }
-										 };
+	auto &tests = writeTests;
 
-	for (size_t testIdx = 0; testIdx < tests.size(); ++testIdx) {
+	const size_t arraySize = ARRAY_SIZE(tests);
+	for (size_t testIdx = 0; testIdx < arraySize; ++testIdx) {
+		tests[testIdx].params = &params;
+
 		for (size_t allocType = 0; allocType < static_cast<size_t>(AllocationType::Count); ++allocType) {
 			params.allocationType = static_cast<AllocationType>(allocType);
 
@@ -31,8 +43,8 @@ void RunTests(const bool infinite)
 			tester.DoTest();
 		}
 
-		if (infinite && (testIdx == tests.size() - 1)) {
-			testIdx = 0;
+		if (infinite && (testIdx == arraySize - 1)) {
+			testIdx = -1;
 		}
 	}
 }

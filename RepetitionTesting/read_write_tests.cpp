@@ -1,4 +1,4 @@
-#include "read_test.h"
+#include "read_write_tests.h"
 
 #include "platform_metrics.h"
 
@@ -164,8 +164,35 @@ TestResult WriteToAllBytes(ITestParameters* params)
 	value.byteCount = buffer.capacity();
 
 	BeginTime(value);
-	buffer.resize(buffer.capacity(), 255);
+	buffer.resize(buffer.capacity());
+	const size_t size = buffer.size();
+	for (size_t i = 0; i < size; ++i) {
+		buffer[i] = static_cast<u8>(i);
+	}
 	EndTime(value);
+
+	return res;
+}
+
+TestResult WriteToAllBytesBackward(ITestParameters* params)
+{
+	ReadTestParameters* readParams = static_cast<ReadTestParameters*>(params);
+	TestResult res{};
+	RepetitionValue& value = res.value;
+
+	std::vector<char> tempBuffer;
+	std::vector<char>& buffer = HandleAllocation(*readParams, tempBuffer);
+	value.byteCount = buffer.capacity();
+
+	BeginTime(value);
+	const size_t size = buffer.capacity();
+	for (size_t i = 0; i < size; ++i) {
+		buffer[size - i - 1] = static_cast<u8>(i);
+		printf("%u ", buffer[size - i - 1]);
+	}
+	EndTime(value);
+
+	printf("\n");
 
 	return res;
 }

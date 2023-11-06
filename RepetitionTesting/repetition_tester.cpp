@@ -1,7 +1,7 @@
 #include "repetition_tester.h"
 
 #include "platform_metrics.h"
-#include "read_test.h"
+#include "read_write_tests.h"
 
 #include <stdio.h>
 #include <assert.h>
