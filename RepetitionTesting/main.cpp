@@ -8,6 +8,8 @@
 #include "repetition_tester.h"
 #include "platform_metrics.h"
 #include "read_write_tests.h"
+#include "os_fault_counter.h"
+#include "virtual_address_analysis.h"
 
 
 TestInfo readTests[] = {
@@ -51,7 +53,12 @@ void RunTests(const bool infinite)
 
 int main(int ArgCount, char** Args)
 {
-	RunTests(true);
+	//RunTests(true);
+
+	const bool isForward = true;
+	TestPageFaultCounter(isForward);
+
+	//DoVirtualAddressAnalysis();
 
 	return 0;
 }
